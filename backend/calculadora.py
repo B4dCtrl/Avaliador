@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Aliases de transformação (compat SisDEA + originais)
+# Aliases de transformação (nomenclatura appraiseR + nomes originais)
 # ---------------------------------------------------------------------------
 
 ALIAS_TRANSFORMACOES = {
@@ -31,7 +31,7 @@ ALIAS_TRANSFORMACOES = {
     "reciproca": "reciproca",
     "reciproca_quadrada": "reciproca_quadrada",
     "quadrada": "quadrada",
-    # aliases SisDEA / appraiseR
+    # aliases appraiseR
     "identity": "nenhuma",
     "ln(x)": "log",
     "sqrt": "raiz_quadrada",

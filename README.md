@@ -6,7 +6,7 @@ Plataforma completa de avaliação imobiliária por inferência estatística (re
 
 ### Backend (FastAPI)
 - **5 endpoints**: `/health`, `/api/calcular-regressao`, `/api/bestfit`, `/api/exportar-word`, `/api/exportar-pdf`
-- **7 transformações** de variáveis (`nenhuma`, `log`, `raiz_quadrada`, `raiz_reciproca`, `reciproca`, `reciproca_quadrada`, `quadrada`) + aliases SisDEA/appraiseR
+- **7 transformações** de variáveis (`nenhuma`, `log`, `raiz_quadrada`, `raiz_reciproca`, `reciproca`, `reciproca_quadrada`, `quadrada`) + aliases compatíveis com `appraiseR`
 - **Auto-ranking** (`/api/bestfit`): testa cartesianamente as transformações em todas as variáveis (dep + indep) e ordena por AIC
 - **Diagnósticos avançados**: Shapiro-Wilk, Jarque-Bera, Breusch-Pagan, Cook's Distance, Durbin-Watson
 - **NBR completa**: amplitude do IC, grau de precisão (I/II/III), campo de arbítrio, grau de fundamentação

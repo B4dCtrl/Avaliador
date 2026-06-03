@@ -9,12 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.40.0",
     "lucide-react": "^0.460.0",
     "papaparse": "^5.4.1",
     "plotly.js-dist-min": "^2.35.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-plotly.js": "^2.6.0"
+    "react-plotly.js": "^2.6.0",
+    "react-router-dom": "^7.16.0",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@types/papaparse": "^5.5.2",
