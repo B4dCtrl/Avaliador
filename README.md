@@ -1,98 +1,101 @@
 # Avaliador
 
-Backend para avaliação imobiliária com regressão linear múltipla (OLS), conforme **NBR 14653-02**.
+Plataforma completa de avaliação imobiliária por inferência estatística (regressão linear múltipla — OLS) com conformidade **NBR 14653-02**.
+
+## Recursos
+
+### Backend (FastAPI)
+- **5 endpoints**: `/health`, `/api/calcular-regressao`, `/api/bestfit`, `/api/exportar-word`, `/api/exportar-pdf`
+- **7 transformações** de variáveis (`nenhuma`, `log`, `raiz_quadrada`, `raiz_reciproca`, `reciproca`, `reciproca_quadrada`, `quadrada`) + aliases SisDEA/appraiseR
+- **Auto-ranking** (`/api/bestfit`): testa cartesianamente as transformações em todas as variáveis (dep + indep) e ordena por AIC
+- **Diagnósticos avançados**: Shapiro-Wilk, Jarque-Bera, Breusch-Pagan, Cook's Distance, Durbin-Watson
+- **NBR completa**: amplitude do IC, grau de precisão (I/II/III), campo de arbítrio, grau de fundamentação
+- **Export**: Word (.docx) e PDF com tabelas formatadas e gráficos
+- **36 testes pytest** verdes
+
+### Frontend (React + Vite + TypeScript + Tailwind + Plotly)
+- Upload de CSV (Papaparse)
+- Configuração de variáveis e transformações a testar
+- Visualização do melhor modelo, ranking, diagnósticos
+- Gráficos interativos: resíduos × ajustados, Q-Q plot, barras de resíduo
+- Dark mode
+- Export Word/PDF integrado
 
 ## Stack
-
-- Python 3.11+
-- FastAPI + Uvicorn
-- statsmodels, numpy, scipy, pandas
-- python-docx, reportlab, matplotlib
-- Pydantic v2
+- Python 3.11+ (testado em 3.13), FastAPI, statsmodels, numpy, pandas, scipy, python-docx, reportlab, matplotlib
+- Node 20+, React 18, Vite 6, TypeScript 5, TailwindCSS 3, Plotly.js, Papaparse
 
 ## Estrutura
-
 ```
-backend/
-├── main.py              # FastAPI app e endpoints
-├── calculadora.py       # OLS, transformações, estatísticas
-├── validador.py         # Validações NBR 14653-02
-├── exportador.py        # Geração Word e PDF
-├── graficos.py          # Imagens PNG para laudos
-├── models.py            # Pydantic schemas
-├── requirements.txt
-├── Dockerfile
-├── .env.example
-└── tests/
-    ├── test_transformacoes.py
-    ├── test_regressao.py
-    └── test_endpoints.py
+Avaliador/
+├── backend/
+│   ├── main.py              FastAPI app
+│   ├── calculadora.py       OLS, transformações, elasticidade
+│   ├── bestfit.py           auto-ranking por AIC
+│   ├── diagnosticos.py      Shapiro/JB/BP/Cook's
+│   ├── nbr_grau.py          grau de precisão e fundamentação
+│   ├── validador.py         checklist NBR 14653-02
+│   ├── exportador.py        DOCX e PDF
+│   ├── graficos.py          PNG para os laudos
+│   ├── models.py            Pydantic
+│   └── tests/               36 testes
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── api.ts
+│   │   └── components/      ConfigPanel, ResultsPanel, Charts
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── Dockerfile
+├── docker-compose.yml
+└── README.md
 ```
 
-## Instalação e execução
+## Como rodar (dev local)
 
+### Backend
 ```bash
 cd backend
-
-# Instalar dependências
 pip install -r requirements.txt
-
-# Rodar o servidor
 python -m uvicorn main:app --reload
+# API em http://localhost:8000
+# Swagger em http://localhost:8000/docs
 ```
 
-A API estará disponível em `http://localhost:8000`.
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+# UI em http://localhost:5173 (proxy /api → 8000)
+```
 
-Documentação interativa (Swagger): `http://localhost:8000/docs`
-
-## Endpoints
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/health` | Health check |
-| POST | `/api/calcular-regressao` | Executa regressão OLS com transformações |
-| POST | `/api/exportar-word` | Gera laudo em DOCX |
-| POST | `/api/exportar-pdf` | Gera laudo em PDF |
-
-## Transformações disponíveis
-
-| Nome | Fórmula |
-|------|---------|
-| `nenhuma` | y = x |
-| `log` | y = ln(x) |
-| `raiz_quadrada` | y = √x |
-| `raiz_reciproca` | y = 1/√x |
-| `reciproca` | y = 1/x |
-| `reciproca_quadrada` | y = 1/x² |
-| `quadrada` | y = x² |
+## Como rodar (Docker)
+```bash
+docker compose up --build
+# UI em http://localhost (80)
+# API em http://localhost:8000
+```
 
 ## Testes
-
 ```bash
 cd backend
 python -m pytest tests/ -v
 ```
 
-## Docker
+## Endpoints
 
-```bash
-docker build -t avaliador-backend .
-docker run -p 8000:8000 avaliador-backend
-```
+| Método | Rota | Descrição |
+|---|---|---|
+| GET  | `/health` | Health check |
+| POST | `/api/calcular-regressao` | OLS com transformações escolhidas pelo usuário |
+| POST | `/api/bestfit` | Auto-ranking de modelos por AIC + diagnóstico completo |
+| POST | `/api/exportar-word` | Gera laudo DOCX |
+| POST | `/api/exportar-pdf`  | Gera laudo PDF |
 
-## Exemplo de uso
+## Status
 
-```bash
-curl -X POST http://localhost:8000/api/calcular-regressao \
-  -H "Content-Type: application/json" \
-  -d '{
-    "dados": {
-      "variavel_dependente": "preco",
-      "valores_dependentes": [150000, 200000, 175000, 220000, 185000],
-      "variaveis_independentes": {
-        "area_total": {"valores": [100, 150, 120, 160, 130], "transformacao": "nenhuma"},
-        "distancia_polo": {"valores": [500, 1000, 800, 1200, 900], "transformacao": "log"}
-      }
-    }
-  }'
-```
+- Repositório público: [B4dCtrl/Avaliador](https://github.com/B4dCtrl/Avaliador)
+- 36/36 testes passando
+- Backend testado em produção local com R²=0.989 em dataset real
+- Frontend buildando sem erros (45 módulos)

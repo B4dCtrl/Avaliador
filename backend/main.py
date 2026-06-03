@@ -17,6 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+import pandas as pd
+
+from bestfit import bestfit, serializar_ranking
 from calculadora import (
     aplicar_transformacoes,
     calcular_durbin_watson,
@@ -25,10 +28,18 @@ from calculadora import (
     correlacao_matrix,
     detectar_outliers,
     preparar_dados_graficos,
+    transformacao_inversa,
     transformar_variavel,
 )
+from diagnosticos import diagnostico_completo
 from exportador import gerar_pdf, gerar_word
-from models import DadosRegressaoRequest, ExportarRequest, RegressaoResponse
+from models import BestfitRequest, DadosRegressaoRequest, ExportarRequest, RegressaoResponse
+from nbr_grau import (
+    amplitude_pct,
+    avaliar_grau_fundamentacao,
+    campo_arbitrio,
+    grau_precisao,
+)
 from validador import validar_nbr_14653
 
 # ---------------------------------------------------------------------------
@@ -175,6 +186,15 @@ def calcular_regressao_endpoint(request: DadosRegressaoRequest) -> Dict[str, Any
     valores_originais = {n: vi.valores for n, vi in dados.variaveis_independentes.items()}
     graficos = preparar_dados_graficos(y, X, modelo_fit, nomes_vars, valores_originais)
 
+    diagnosticos = diagnostico_completo(modelo_fit)
+    grau_fund = avaliar_grau_fundamentacao(
+        amp=None,
+        p_valores_coefs=pvalores_sem_intercepto.tolist(),
+        p_valor_f=float(modelo_fit.f_pvalue),
+        n=int(modelo_fit.nobs),
+        k=len(nomes_vars),
+    )
+
     resposta = {
         "status": "sucesso",
         "regressao": {
@@ -184,6 +204,8 @@ def calcular_regressao_endpoint(request: DadosRegressaoRequest) -> Dict[str, Any
             "p_valor_f": round(float(modelo_fit.f_pvalue), 8),
             "durbin_watson": round(dw, 4),
             "desvio_padrao": round(float(modelo_fit.mse_resid ** 0.5), 6),
+            "aic": round(float(modelo_fit.aic), 4),
+            "bic": round(float(modelo_fit.bic), 4),
             "observacoes": int(modelo_fit.nobs),
             "variaveis": len(nomes_vars),
         },
@@ -191,12 +213,137 @@ def calcular_regressao_endpoint(request: DadosRegressaoRequest) -> Dict[str, Any
         "intercepto": round(float(modelo_fit.params[0]), 6),
         "correlacao_matrix": matriz_corr,
         "outliers": outliers,
+        "diagnosticos": diagnosticos,
+        "grau_fundamentacao": grau_fund,
         "validacao_nbr": validacao,
         "graficos": graficos,
     }
 
     logger.info("Regressão concluída: R²=%.4f, DW=%.4f", modelo_fit.rsquared, dw)
     return resposta
+
+
+# ---------------------------------------------------------------------------
+# POST /api/bestfit — auto-ranking de transformações
+# ---------------------------------------------------------------------------
+
+@app.post("/api/bestfit", tags=["regressao"])
+def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
+    """
+    Testa todas as combinações de transformação para as variáveis e
+    ranqueia os modelos por AIC, retornando também o melhor com diagnóstico
+    completo, intervalos de predição e grau de fundamentação NBR.
+    """
+    logger.info(
+        "Bestfit: dep=%s, indep=%s, transf=%s, n=%d",
+        request.variavel_dependente,
+        request.variaveis_independentes,
+        request.transformacoes_testar,
+        len(request.dados),
+    )
+
+    df = pd.DataFrame(request.dados)
+    faltando = [c for c in [request.variavel_dependente, *request.variaveis_independentes] if c not in df.columns]
+    if faltando:
+        raise HTTPException(status_code=422, detail=f"Colunas ausentes nos dados: {faltando}")
+
+    ranking = bestfit(
+        df,
+        request.variavel_dependente,
+        request.variaveis_independentes,
+        transformacoes=request.transformacoes_testar,
+        excluir_indices=request.excluir_indices,
+        top_n=request.top_n,
+    )
+
+    if not ranking:
+        raise HTTPException(status_code=422, detail="Nenhum modelo válido encontrado.")
+
+    melhor = ranking[0]
+    modelo = melhor["_modelo"]
+    dados_usados = melhor["_dados_usados"]
+    transf_y = melhor["transformacoes"][request.variavel_dependente]
+
+    # Diagnósticos completos
+    diagnosticos = diagnostico_completo(modelo)
+
+    # Predição com intervalo no espaço original
+    alpha = 1.0 - request.nivel_confianca
+    grau_fund = None
+    amp = None
+    grau_prec = None
+    campo_inf = None
+    campo_sup = None
+    try:
+        import statsmodels.api as sm
+        X_pred = sm.add_constant(dados_usados[request.variaveis_independentes], has_constant="add")
+        pred = modelo.get_prediction(X_pred).summary_frame(alpha=alpha)
+        y_hat_t = pred["mean"].values
+        y_lwr_t = pred["obs_ci_lower"].values
+        y_upr_t = pred["obs_ci_upper"].values
+
+        y_hat = transformacao_inversa(y_hat_t, transf_y)
+        y_lwr = transformacao_inversa(y_lwr_t, transf_y)
+        y_upr = transformacao_inversa(y_upr_t, transf_y)
+
+        mean_hat = float(np.nanmean(y_hat))
+        mean_lwr = float(np.nanmean(y_lwr))
+        mean_upr = float(np.nanmean(y_upr))
+        amp = round(amplitude_pct(mean_hat, mean_lwr, mean_upr), 4)
+        grau_prec = grau_precisao(amp)
+        campo_inf, campo_sup = campo_arbitrio(mean_hat, grau_prec)
+        campo_inf = round(campo_inf, 4)
+        campo_sup = round(campo_sup, 4)
+    except Exception as e:
+        logger.warning("Predição/amplitude falhou: %s", e)
+
+    # Grau de fundamentação completo
+    pvalores_indep = [
+        float(modelo.pvalues[c]) for c in modelo.params.index if c != "const"
+    ]
+    grau_fund = avaliar_grau_fundamentacao(
+        amp=amp,
+        p_valores_coefs=pvalores_indep,
+        p_valor_f=float(modelo.f_pvalue),
+        n=int(modelo.nobs),
+        k=len(request.variaveis_independentes),
+    )
+
+    return {
+        "status": "sucesso",
+        "melhor_modelo": {
+            "transformacoes": melhor["transformacoes"],
+            "transformacao_y": transf_y,
+            "r2": melhor["r2"],
+            "r2_ajustado": melhor["r2_ajustado"],
+            "f_stat": melhor["f_stat"],
+            "f_p_valor": melhor["f_p_valor"],
+            "aic": melhor["aic"],
+            "bic": melhor["bic"],
+            "intercepto": round(float(modelo.params.get("const", 0.0)), 6),
+            "coeficientes": [
+                {
+                    "variavel": nome,
+                    "transformacao": melhor["transformacoes"].get(nome, "nenhuma"),
+                    "coeficiente": round(float(modelo.params[nome]), 6),
+                    "erro_padrao": round(float(modelo.bse[nome]), 6),
+                    "t_stat": round(float(modelo.tvalues[nome]), 4),
+                    "p_valor": round(float(modelo.pvalues[nome]), 6),
+                }
+                for nome in modelo.params.index if nome != "const"
+            ],
+            "residuos": [round(float(r), 6) for r in modelo.resid],
+            "valores_ajustados": [round(float(v), 6) for v in modelo.fittedvalues],
+        },
+        "diagnosticos": diagnosticos,
+        "amplitude_pct": amp,
+        "grau_precisao": grau_prec,
+        "campo_arbitrio_inferior": campo_inf,
+        "campo_arbitrio_superior": campo_sup,
+        "grau_fundamentacao": grau_fund,
+        "ranking": serializar_ranking(ranking),
+        "n_modelos_testados": len(ranking),
+    }
 
 
 # ---------------------------------------------------------------------------

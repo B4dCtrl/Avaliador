@@ -1,0 +1,20 @@
+services:
+  backend:
+    build: ./backend
+    container_name: avaliador-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend/downloads:/app/downloads
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: avaliador-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

@@ -30,4 +30,14 @@ ENV/
 *.log
 backend/server.log
 backend/server.err
+backend/srv.log
+backend/srv.err
 backend/downloads/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+frontend/vite.log
+frontend/vite.err

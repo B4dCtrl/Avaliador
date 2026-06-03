@@ -74,6 +74,19 @@ class ExportarRequest(BaseModel):
     avaliador: AvaliadorInfo
 
 
+# Bestfit / auto-ranking
+
+class BestfitRequest(BaseModel):
+    """Modo dataset: cliente envia linha-por-linha + variáveis a usar."""
+    dados: List[Dict[str, Any]]
+    variavel_dependente: str
+    variaveis_independentes: List[str]
+    transformacoes_testar: List[str] = ["nenhuma", "log", "raiz_quadrada", "raiz_reciproca"]
+    excluir_indices: List[int] = []
+    nivel_confianca: float = Field(default=0.80, ge=0.50, le=0.99)
+    top_n: int = 20
+
+
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------

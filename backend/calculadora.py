@@ -19,6 +19,59 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Aliases de transformação (compat SisDEA + originais)
+# ---------------------------------------------------------------------------
+
+ALIAS_TRANSFORMACOES = {
+    # nomes originais Avaliador
+    "nenhuma": "nenhuma",
+    "log": "log",
+    "raiz_quadrada": "raiz_quadrada",
+    "raiz_reciproca": "raiz_reciproca",
+    "reciproca": "reciproca",
+    "reciproca_quadrada": "reciproca_quadrada",
+    "quadrada": "quadrada",
+    # aliases SisDEA / appraiseR
+    "identity": "nenhuma",
+    "ln(x)": "log",
+    "sqrt": "raiz_quadrada",
+    "rsqrt": "raiz_reciproca",
+    "rec": "reciproca",
+    "1/x": "reciproca",
+    "1/x^2": "reciproca_quadrada",
+    "sqr": "quadrada",
+    "x^2": "quadrada",
+}
+
+
+def normalizar_transformacao(nome: str) -> str:
+    """Converte um alias para o nome canônico interno."""
+    return ALIAS_TRANSFORMACOES.get(nome, nome)
+
+
+def transformacao_inversa(valores: np.ndarray, tipo_transformacao: str) -> np.ndarray:
+    """Aplica a inversa da transformação (para retornar Y ao espaço original)."""
+    tipo = normalizar_transformacao(tipo_transformacao)
+    x = np.asarray(valores, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if tipo == "nenhuma":
+            return x
+        if tipo == "log":
+            return np.exp(x)
+        if tipo == "raiz_quadrada":
+            return x ** 2
+        if tipo == "raiz_reciproca":
+            return np.where(x == 0, np.nan, 1.0 / (x ** 2))
+        if tipo == "reciproca":
+            return np.where(x == 0, np.nan, 1.0 / x)
+        if tipo == "reciproca_quadrada":
+            return np.where(x <= 0, np.nan, 1.0 / np.sqrt(x))
+        if tipo == "quadrada":
+            return np.sqrt(np.abs(x))
+    raise ValueError(f"Transformação inversa desconhecida: {tipo}")
+
+
+# ---------------------------------------------------------------------------
 # Transformações (7 tipos obrigatórios)
 # ---------------------------------------------------------------------------
 
@@ -37,6 +90,7 @@ def transformar_variavel(valores: List[float], tipo_transformacao: str) -> np.nd
     Raises:
         ValueError: Se os valores forem inválidos para a transformação escolhida.
     """
+    tipo_transformacao = normalizar_transformacao(tipo_transformacao)
     x = np.array(valores, dtype=float)
 
     if tipo_transformacao == "nenhuma":
