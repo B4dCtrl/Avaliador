@@ -87,6 +87,19 @@ class BestfitRequest(BaseModel):
     top_n: int = 20
 
 
+class AvaliarImovelRequest(BaseModel):
+    """Predição pontual: estima o valor de um imóvel-alvo."""
+    dados: List[Dict[str, Any]]
+    variavel_dependente: str
+    variaveis_independentes: List[str]
+    # transformação por variável (inclui a dependente). Ex.: {"preco": "log", "area": "nenhuma"}
+    transformacoes: Dict[str, str]
+    # valores do imóvel a avaliar. Ex.: {"area": 130, "distancia": 800}
+    imovel_alvo: Dict[str, float]
+    excluir_indices: List[int] = []
+    nivel_confianca: float = Field(default=0.80, ge=0.50, le=0.99)
+
+
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------

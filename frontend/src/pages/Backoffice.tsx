@@ -13,6 +13,7 @@ import {
 import ConfigPanel from '../components/ConfigPanel'
 import ResultsPanel from '../components/ResultsPanel'
 import Charts from '../components/Charts'
+import AvaliarImovel from '../components/AvaliarImovel'
 
 const TRANSFORMACOES = [
   { value: 'nenhuma', label: 'Sem transformação' },
@@ -180,6 +181,13 @@ export default function Backoffice() {
             {resultado ? (
               <div className="space-y-4">
                 <ResultsPanel resultado={resultado} />
+                <AvaliarImovel
+                  resultado={resultado}
+                  dados={dados}
+                  varDependente={varDependente}
+                  varsIndependentes={varsIndependentes}
+                  nivelConfianca={nivelConfianca}
+                />
                 <Charts resultado={resultado} dados={dados} varDependente={varDependente} />
               </div>
             ) : (

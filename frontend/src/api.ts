@@ -87,6 +87,39 @@ export async function calcularBestfit(req: BestfitRequest): Promise<BestfitRespo
   return resp.json()
 }
 
+export interface AvaliarImovelResponse {
+  status: string
+  valor_estimado: number
+  intervalo_predicao: [number, number]
+  intervalo_confianca_media: [number, number]
+  nivel_confianca: number
+  amplitude_pct: number
+  grau_precisao: string
+  campo_arbitrio: [number, number]
+  transformacao_y: string
+  imovel_alvo: Record<string, number>
+}
+
+export async function avaliarImovel(req: {
+  dados: Record<string, unknown>[]
+  variavel_dependente: string
+  variaveis_independentes: string[]
+  transformacoes: Record<string, string>
+  imovel_alvo: Record<string, number>
+  nivel_confianca?: number
+}): Promise<AvaliarImovelResponse> {
+  const resp = await fetch(`${BASE}/api/avaliar-imovel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) {
+    const text = await resp.text()
+    throw new Error(`Erro ${resp.status}: ${text}`)
+  }
+  return resp.json()
+}
+
 export interface ExportConfig {
   endereco: string
   area_terreno?: number

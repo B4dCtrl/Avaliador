@@ -33,7 +33,13 @@ from calculadora import (
 )
 from diagnosticos import diagnostico_completo
 from exportador import gerar_pdf, gerar_word
-from models import BestfitRequest, DadosRegressaoRequest, ExportarRequest, RegressaoResponse
+from models import (
+    AvaliarImovelRequest,
+    BestfitRequest,
+    DadosRegressaoRequest,
+    ExportarRequest,
+    RegressaoResponse,
+)
 from nbr_grau import (
     amplitude_pct,
     avaliar_grau_fundamentacao,
@@ -343,6 +349,105 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
         "grau_fundamentacao": grau_fund,
         "ranking": serializar_ranking(ranking),
         "n_modelos_testados": len(ranking),
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /api/avaliar-imovel — predição pontual de um imóvel-alvo
+# ---------------------------------------------------------------------------
+
+@app.post("/api/avaliar-imovel", tags=["regressao"])
+def avaliar_imovel(request: AvaliarImovelRequest) -> Dict[str, Any]:
+    """
+    Estima o valor de um imóvel-alvo a partir de um modelo (transformações
+    dadas) ajustado ao dataset. Retorna valor estimado + intervalo de
+    confiança/predição no espaço original da variável dependente.
+    """
+    import statsmodels.api as sm
+    from calculadora import transformar_variavel
+
+    df = pd.DataFrame(request.dados)
+    y_name = request.variavel_dependente
+    x_names = request.variaveis_independentes
+
+    faltando = [c for c in [y_name, *x_names] if c not in df.columns]
+    if faltando:
+        raise HTTPException(status_code=422, detail=f"Colunas ausentes: {faltando}")
+
+    if request.excluir_indices:
+        df = df.drop(index=[i for i in request.excluir_indices if i in df.index])
+
+    transf_y = request.transformacoes.get(y_name, "nenhuma")
+
+    # Monta matriz transformada
+    try:
+        y_t = transformar_variavel(df[y_name].astype(float).tolist(), transf_y)
+        cols = {}
+        for x in x_names:
+            tx = request.transformacoes.get(x, "nenhuma")
+            cols[x] = transformar_variavel(df[x].astype(float).tolist(), tx)
+        X_df = pd.DataFrame(cols)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    # Remove linhas inválidas
+    X_df["_y"] = y_t
+    X_df = X_df.replace([np.inf, -np.inf], np.nan).dropna()
+    if len(X_df) < len(x_names) + 2:
+        raise HTTPException(status_code=422, detail="Dados insuficientes após transformação.")
+
+    y_fit = X_df["_y"]
+    X_fit = sm.add_constant(X_df[x_names], has_constant="add")
+    modelo = sm.OLS(y_fit, X_fit).fit()
+
+    # Transforma o imóvel-alvo
+    try:
+        linha = {"const": 1.0}
+        for x in x_names:
+            if x not in request.imovel_alvo:
+                raise HTTPException(status_code=422, detail=f"Falta valor de '{x}' no imóvel-alvo.")
+            tx = request.transformacoes.get(x, "nenhuma")
+            linha[x] = float(transformar_variavel([request.imovel_alvo[x]], tx)[0])
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    X_alvo = pd.DataFrame([linha])[["const", *x_names]]
+
+    alpha = 1.0 - request.nivel_confianca
+    pred = modelo.get_prediction(X_alvo).summary_frame(alpha=alpha)
+    y_hat_t = float(pred["mean"].iloc[0])
+    y_lwr_t = float(pred["obs_ci_lower"].iloc[0])
+    y_upr_t = float(pred["obs_ci_upper"].iloc[0])
+    mean_lwr_t = float(pred["mean_ci_lower"].iloc[0])
+    mean_upr_t = float(pred["mean_ci_upper"].iloc[0])
+
+    valor = float(transformacao_inversa(np.array([y_hat_t]), transf_y)[0])
+    ic_pred_inf = float(transformacao_inversa(np.array([y_lwr_t]), transf_y)[0])
+    ic_pred_sup = float(transformacao_inversa(np.array([y_upr_t]), transf_y)[0])
+    ic_conf_inf = float(transformacao_inversa(np.array([mean_lwr_t]), transf_y)[0])
+    ic_conf_sup = float(transformacao_inversa(np.array([mean_upr_t]), transf_y)[0])
+
+    # Ordena limites (transformações inversas podem inverter ordem)
+    pred_inf, pred_sup = sorted([ic_pred_inf, ic_pred_sup])
+    conf_inf, conf_sup = sorted([ic_conf_inf, ic_conf_sup])
+
+    amp = amplitude_pct(valor, pred_inf, pred_sup)
+    grau = grau_precisao(amp)
+    campo_inf, campo_sup = campo_arbitrio(valor, grau)
+
+    logger.info("Imóvel-alvo avaliado: valor=%.2f, grau=%s", valor, grau)
+
+    return {
+        "status": "sucesso",
+        "valor_estimado": round(valor, 2),
+        "intervalo_predicao": [round(pred_inf, 2), round(pred_sup, 2)],
+        "intervalo_confianca_media": [round(conf_inf, 2), round(conf_sup, 2)],
+        "nivel_confianca": request.nivel_confianca,
+        "amplitude_pct": round(amp, 2),
+        "grau_precisao": grau,
+        "campo_arbitrio": [round(campo_inf, 2), round(campo_sup, 2)],
+        "transformacao_y": transf_y,
+        "imovel_alvo": request.imovel_alvo,
     }
 
 
