@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Env
+.env
+
+# Logs e arquivos gerados
+*.log
+backend/server.log
+backend/server.err
+backend/downloads/

@@ -142,8 +142,8 @@ def calcular_regressao_endpoint(request: DadosRegressaoRequest) -> Dict[str, Any
             "significancia_percent": round(float(pvalores_sem_intercepto[i]) * 100, 4),
             "erro_padrao": round(float(erros_sem_intercepto[i]), 6),
             "intervalo_confianca_95": [
-                round(float(ic_sem_intercepto.iloc[i, 0]), 4),
-                round(float(ic_sem_intercepto.iloc[i, 1]), 4),
+                round(float(np.asarray(ic_sem_intercepto)[i, 0]), 4),
+                round(float(np.asarray(ic_sem_intercepto)[i, 1]), 4),
             ],
         })
 
