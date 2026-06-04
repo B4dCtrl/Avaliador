@@ -120,6 +120,57 @@ export async function avaliarImovel(req: {
   return resp.json()
 }
 
+/** Baixa um arquivo do backend sem abrir aba/popup do navegador. */
+export async function baixarArquivo(url: string, nomeArquivo: string): Promise<void> {
+  const resp = await fetch(`${BASE}${url}`)
+  if (!resp.ok) throw new Error(`Erro ao baixar (${resp.status})`)
+  const blob = await resp.blob()
+  const objUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objUrl
+  a.download = nomeArquivo
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(objUrl)
+}
+
+export interface AmostraAnalise {
+  indice: number
+  residuo_padronizado: number
+  cooks_distance: number
+  leverage: number
+  distancia_alvo: number | null
+  atipica: boolean
+  recomendar_desabilitar: boolean
+  motivos: string[]
+}
+
+export interface AnaliseResponse {
+  status: string
+  n_amostras: number
+  limiares: { residuo: number; cooks: number; leverage: number }
+  amostras: AmostraAnalise[]
+  recomendar_desabilitar: number[]
+  r2_atual: number
+}
+
+export async function analisarAmostras(req: {
+  dados: Record<string, unknown>[]
+  variavel_dependente: string
+  variaveis_independentes: string[]
+  transformacoes: Record<string, string>
+  imovel_alvo?: Record<string, number> | null
+}): Promise<AnaliseResponse> {
+  const resp = await fetch(`${BASE}/api/analisar-amostras`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`)
+  return resp.json()
+}
+
 export interface ExportConfig {
   endereco: string
   area_terreno?: number

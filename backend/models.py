@@ -100,6 +100,16 @@ class AvaliarImovelRequest(BaseModel):
     nivel_confianca: float = Field(default=0.80, ge=0.50, le=0.99)
 
 
+class AnalisarAmostrasRequest(BaseModel):
+    """Detecta outliers/amostras atípicas considerando o imóvel-alvo."""
+    dados: List[Dict[str, Any]]
+    variavel_dependente: str
+    variaveis_independentes: List[str]
+    transformacoes: Dict[str, str]
+    imovel_alvo: Optional[Dict[str, float]] = None
+    limiar_residuo: float = 2.0
+
+
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------

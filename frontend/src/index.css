@@ -4,3 +4,87 @@
 
 html, body, #root { height: 100%; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+@layer components {
+  .btn-grid {
+    @apply inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium
+           bg-[#ece9d8] text-[#222] border border-[#aca899]
+           hover:bg-[#f5f3e8] active:border-[#8a8678]
+           rounded-[3px] transition-colors;
+  }
+
+  /* ---- Tema "programa anos 2000" ---- */
+  .win-window {
+    @apply bg-[#ece9d8] border border-[#0a246a] rounded-[6px] shadow-[0_8px_30px_rgba(0,0,0,0.35)] overflow-hidden;
+  }
+  .win-titlebar {
+    @apply flex items-center justify-between px-2.5 py-1.5 text-white font-semibold text-[13px];
+    background: linear-gradient(180deg, #0a6cff 0%, #0a4fd6 45%, #0a3fb0 100%);
+  }
+  .win-menubar {
+    @apply flex items-center gap-3 px-3 py-1 text-[12px] text-[#222] bg-[#f1efe2] border-b border-[#aca899];
+  }
+  .win-tab {
+    @apply px-3 py-1 text-[12px] text-[#333] border border-b-0 border-[#aca899] rounded-t-[5px] bg-[#d8d4c4] cursor-pointer -mb-px;
+  }
+  .win-tab-active {
+    @apply bg-[#ece9d8] font-semibold text-[#0a3fb0];
+  }
+  .win-panel {
+    @apply bg-[#f7f6f0] border border-[#aca899] rounded-[4px];
+  }
+  .win-field {
+    @apply px-2 py-1 text-[12px] bg-white border border-[#7f9db9] rounded-[2px]
+           focus:outline-none focus:border-[#0a6cff];
+  }
+  .win-btn {
+    @apply px-3 py-1 text-[12px] font-medium text-[#222] bg-gradient-to-b from-[#fdfdfd] to-[#dcd8c8]
+           border border-[#8a8678] rounded-[3px] hover:from-white hover:to-[#e8e4d4]
+           active:from-[#dcd8c8] active:to-[#fdfdfd] disabled:opacity-50 transition-colors;
+  }
+  .win-btn-primary {
+    @apply text-white border-[#0a3fb0] bg-gradient-to-b from-[#3a8bff] to-[#0a4fd6]
+           hover:from-[#4a9bff] hover:to-[#0a5fe6];
+  }
+  .win-statusbar {
+    @apply flex items-center gap-3 px-3 py-1 text-[11px] text-[#444] bg-[#ece9d8] border-t border-[#aca899];
+  }
+
+  /* ---- Ribbon (faixa de opções estilo Office 2007/Win7) ---- */
+  .ribbon {
+    background: linear-gradient(180deg, #f3f6fb 0%, #dde6f2 100%);
+    @apply border-b border-[#9bb0cd];
+  }
+  .ribbon-tabs {
+    @apply flex items-end gap-0.5 px-2 pt-1;
+    background: linear-gradient(180deg, #cdddf0 0%, #b9cde6 100%);
+  }
+  .ribbon-tab {
+    @apply px-3 py-1 text-[12px] text-[#1b3a6b] cursor-pointer rounded-t-[4px] border border-transparent;
+  }
+  .ribbon-tab:hover { @apply bg-white/50; }
+  .ribbon-tab-active {
+    @apply bg-[#f3f6fb] border-[#9bb0cd] border-b-[#f3f6fb] font-semibold -mb-px;
+  }
+  .ribbon-body {
+    @apply flex items-stretch gap-0 px-2 py-2 overflow-x-auto;
+    min-height: 92px;
+  }
+  .ribbon-group {
+    @apply flex flex-col items-center px-2 border-r border-[#c2d0e4] shrink-0;
+  }
+  .ribbon-group-items { @apply flex items-start gap-0.5 flex-1; }
+  .ribbon-group-label { @apply text-[10px] text-[#5a6b85] mt-1 text-center; }
+  .ribbon-btn {
+    @apply flex flex-col items-center justify-start gap-1 px-2 py-1 rounded-[4px]
+           text-[11px] text-[#1b3a6b] hover:bg-white/70 hover:border hover:border-[#a9c0e0]
+           border border-transparent min-w-[52px] max-w-[72px] text-center cursor-pointer
+           disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:border-transparent;
+  }
+  .ribbon-btn-ico { @apply text-[#2456a6]; }
+  .ribbon-btn-sm {
+    @apply flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] text-[11px] text-[#1b3a6b]
+           hover:bg-white/70 border border-transparent hover:border-[#a9c0e0] cursor-pointer
+           disabled:opacity-40 disabled:cursor-default;
+  }
+}
