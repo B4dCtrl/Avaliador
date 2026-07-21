@@ -1,4 +1,5 @@
 import type { BestfitResponse } from '../api'
+import InfoHint, { EXPLICACOES, type Explicacao } from './InfoHint'
 
 interface Props {
   resultado: BestfitResponse
@@ -18,10 +19,12 @@ function grauT(maxP?: number): { label: string; cor: string } {
   return { label: 'Fora', cor: 'text-red-600 font-semibold' }
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Stat({ label, value, hint, exp }: { label: string; value: string; hint?: string; exp?: Explicacao }) {
   return (
     <div className="bg-slate-50 dark:bg-slate-700 px-3 py-2 rounded">
-      <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+        {label}{exp && <InfoHint titulo={label} exp={exp} />}
+      </div>
       <div className="text-base font-semibold text-slate-800 dark:text-slate-100">{value}</div>
       {hint && <div className="text-[10px] text-slate-500">{hint}</div>}
     </div>
@@ -38,10 +41,10 @@ export default function ResultsPanel({ resultado, onUsarModelo, loading }: Props
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4">
         <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">Melhor modelo</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Stat label="R²" value={fmt(m.r2, 4)} />
-          <Stat label="R² ajustado" value={fmt(m.r2_ajustado, 4)} />
-          <Stat label="F" value={fmt(m.f_stat, 2)} hint={`p = ${fmt(m.f_p_valor, 6)}`} />
-          <Stat label="AIC / BIC" value={`${fmt(m.aic, 1)} / ${fmt(m.bic, 1)}`} />
+          <Stat label="R²" value={fmt(m.r2, 4)} exp={EXPLICACOES.r2} />
+          <Stat label="R² ajustado" value={fmt(m.r2_ajustado, 4)} exp={EXPLICACOES.r2_ajustado} />
+          <Stat label="F" value={fmt(m.f_stat, 2)} hint={`p = ${fmt(m.f_p_valor, 6)}`} exp={EXPLICACOES.f} />
+          <Stat label="AIC / BIC" value={`${fmt(m.aic, 1)} / ${fmt(m.bic, 1)}`} exp={EXPLICACOES.aic_bic} />
         </div>
         <p className="text-sm mt-3 text-slate-600 dark:text-slate-300">
           Transformação Y: <code className="font-mono">{m.transformacao_y}</code>
@@ -89,21 +92,22 @@ export default function ResultsPanel({ resultado, onUsarModelo, loading }: Props
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4">
         <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Diagnósticos</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <Stat label="Shapiro-Wilk (normalidade)" value={fmt(d.shapiro_wilk.stat, 4)} hint={`p = ${fmt(d.shapiro_wilk.p_valor, 4)}`} />
-          <Stat label="Jarque-Bera (normalidade)" value={fmt(d.jarque_bera.stat, 4)} hint={`p = ${fmt(d.jarque_bera.p_valor, 4)}`} />
-          <Stat label="Breusch-Pagan (homocedast.)" value={fmt(d.breusch_pagan.stat, 4)} hint={`p = ${fmt(d.breusch_pagan.p_valor, 4)}`} />
-          <Stat label="Outliers Cook's" value={String(d.outliers_cooks.detectados)} hint={`limiar ${fmt(d.outliers_cooks.limiar, 4)}`} />
+          <Stat label="Shapiro-Wilk (normalidade)" value={fmt(d.shapiro_wilk.stat, 4)} hint={`p = ${fmt(d.shapiro_wilk.p_valor, 4)}`} exp={EXPLICACOES.shapiro} />
+          <Stat label="Jarque-Bera (normalidade)" value={fmt(d.jarque_bera.stat, 4)} hint={`p = ${fmt(d.jarque_bera.p_valor, 4)}`} exp={EXPLICACOES.jarque_bera} />
+          <Stat label="Breusch-Pagan (homocedast.)" value={fmt(d.breusch_pagan.stat, 4)} hint={`p = ${fmt(d.breusch_pagan.p_valor, 4)}`} exp={EXPLICACOES.breusch_pagan} />
+          <Stat label="Outliers Cook's" value={String(d.outliers_cooks.detectados)} hint={`limiar ${fmt(d.outliers_cooks.limiar, 4)}`} exp={EXPLICACOES.outliers_cooks} />
         </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4">
         <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Conformidade NBR 14653-02</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Stat label="Amplitude IC" value={resultado.amplitude_pct != null ? `${fmt(resultado.amplitude_pct, 2)}%` : '—'} />
-          <Stat label="Grau precisão" value={resultado.grau_precisao || '—'} />
-          <Stat label="Grau fundamentação" value={resultado.grau_fundamentacao.grau} />
+          <Stat label="Amplitude IC" value={resultado.amplitude_pct != null ? `${fmt(resultado.amplitude_pct, 2)}%` : '—'} exp={EXPLICACOES.amplitude} />
+          <Stat label="Grau precisão" value={resultado.grau_precisao || '—'} exp={EXPLICACOES.grau_precisao} />
+          <Stat label="Grau fundamentação" value={resultado.grau_fundamentacao.grau} exp={EXPLICACOES.grau_fundamentacao} />
           <Stat
             label="Campo arbítrio"
+            exp={EXPLICACOES.campo_arbitrio}
             value={
               resultado.campo_arbitrio_inferior != null && resultado.campo_arbitrio_superior != null
                 ? `${fmt(resultado.campo_arbitrio_inferior, 0)} … ${fmt(resultado.campo_arbitrio_superior, 0)}`

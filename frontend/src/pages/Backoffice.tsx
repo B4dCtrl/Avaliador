@@ -11,6 +11,7 @@ import {
   reconsiderarTodas, desabilitarIndices,
 } from '../grid'
 import { carregarPerfil } from './Home'
+import InfoHint, { EXPLICACOES, type Explicacao } from '../components/InfoHint'
 import DataGrid from '../components/DataGrid'
 import PainelAvaliando from '../components/PainelAvaliando'
 import ResultsPanel from '../components/ResultsPanel'
@@ -162,6 +163,12 @@ export default function Backoffice() {
 
   const handleExport = useCallback(async (tipo: 'word' | 'pdf') => {
     if (!resultado) return
+    // Integridade: valor adotado não pode sair do campo de arbítrio (±15%)
+    if (avaliacao && valorArbitrado != null &&
+        (valorArbitrado < avaliacao.campo_arbitrio[0] || valorArbitrado > avaliacao.campo_arbitrio[1])) {
+      setErro(`Valor adotado fora do campo de arbítrio (${brl(avaliacao.campo_arbitrio[0])} – ${brl(avaliacao.campo_arbitrio[1])}). Ajuste antes de gerar o laudo.`)
+      return
+    }
     try {
       const dep = grid.colunas.find((c) => c.papel === 'dependente')!
       const payload = bestfitParaExport(resultado, dep.nome, avaliacao, valorArbitrado)
@@ -301,44 +308,23 @@ export default function Backoffice() {
 
               {avaliacao ? (
                 <div className="rounded-[4px] border-2 border-amber-400 bg-gradient-to-b from-amber-50 to-amber-100/60 p-4">
-                  <div className="flex flex-wrap items-start gap-6">
-                    <div>
-                      <div className="text-[12px] text-amber-800 font-semibold">Valor estimado (modelo)</div>
-                      <div className="text-[30px] font-bold text-[#0a3fb0] leading-tight">{brl(avaliacao.valor_estimado)}</div>
-                    </div>
-                    <div className="flex-1 min-w-[260px]">
-                      <div className="text-[12px] text-amber-800 font-semibold">
-                        Valor adotado pelo avaliador <span className="font-normal">(campo de arbítrio ±15%)</span>
-                      </div>
-                      <div className="text-[24px] font-bold text-emerald-700 leading-tight">
-                        {brl(valorArbitrado ?? avaliacao.valor_estimado)}
-                        {valorArbitrado != null && valorArbitrado !== avaliacao.valor_estimado && (
-                          <span className="ml-2 text-[11px] font-medium text-emerald-800 bg-emerald-100 border border-emerald-300 rounded px-1.5 py-0.5 align-middle">
-                            {(((valorArbitrado - avaliacao.valor_estimado) / avaliacao.valor_estimado) * 100).toFixed(1)}% vs. modelo
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="range"
-                        min={Math.round(avaliacao.campo_arbitrio[0])}
-                        max={Math.round(avaliacao.campo_arbitrio[1])}
-                        step={100}
-                        value={valorArbitrado ?? avaliacao.valor_estimado}
-                        onChange={(e) => setValorArbitrado(Number(e.target.value))}
-                        className="w-full accent-emerald-600 mt-1"
-                      />
-                      <div className="flex justify-between text-[10px] text-amber-800">
-                        <span>{brl(avaliacao.campo_arbitrio[0])}</span>
-                        <button onClick={() => setValorArbitrado(null)} className="underline hover:text-amber-950">voltar ao valor do modelo</button>
-                        <span>{brl(avaliacao.campo_arbitrio[1])}</span>
-                      </div>
-                    </div>
+                  <div className="text-[12px] text-amber-800 font-semibold">
+                    Valor da avaliação (resultado do modelo)
                   </div>
+                  <div className="text-[30px] font-bold text-[#0a3fb0] leading-tight">{brl(avaliacao.valor_estimado)}</div>
+                  <p className="text-[11px] text-amber-700 mt-1">
+                    Este é o valor calculado pelo modelo selecionado. Para adotar outro valor, escolha outro
+                    modelo em “Modelos calculados” — ou arbitre o valor final ao gerar o laudo (dentro do campo de arbítrio).
+                  </p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-[12px]">
-                    <Mini label={`Predição ${(avaliacao.nivel_confianca * 100).toFixed(0)}%`} value={`${brl(avaliacao.intervalo_predicao[0])} – ${brl(avaliacao.intervalo_predicao[1])}`} />
-                    <Mini label="IC da média" value={`${brl(avaliacao.intervalo_confianca_media[0])} – ${brl(avaliacao.intervalo_confianca_media[1])}`} />
-                    <Mini label="Amplitude" value={`${avaliacao.amplitude_pct}%`} />
-                    <Mini label="Grau precisão" value={avaliacao.grau_precisao} />
+                    <Mini label={`Predição ${(avaliacao.nivel_confianca * 100).toFixed(0)}%`} value={`${brl(avaliacao.intervalo_predicao[0])} – ${brl(avaliacao.intervalo_predicao[1])}`} exp={EXPLICACOES.poder_predicao} />
+                    <Mini label="IC da média" value={`${brl(avaliacao.intervalo_confianca_media[0])} – ${brl(avaliacao.intervalo_confianca_media[1])}`} exp={EXPLICACOES.amplitude} />
+                    <Mini label="Amplitude" value={`${avaliacao.amplitude_pct}%`} exp={EXPLICACOES.amplitude} />
+                    <Mini label="Grau precisão" value={avaliacao.grau_precisao} exp={EXPLICACOES.grau_precisao} />
+                  </div>
+                  <div className="mt-2 text-[11px] text-amber-800">
+                    Campo de arbítrio (±15%): <b>{brl(avaliacao.campo_arbitrio[0])} – {brl(avaliacao.campo_arbitrio[1])}</b>
+                    <InfoHint titulo="Campo de arbítrio" exp={EXPLICACOES.campo_arbitrio} />
                   </div>
                 </div>
               ) : (
@@ -371,6 +357,39 @@ export default function Backoffice() {
 
               <div className="win-panel p-3">
                 <div className="text-[12px] font-semibold text-[#0a3fb0] mb-2">Gerar laudo</div>
+
+                {/* Arbitragem do valor final — só aqui, no laudo, dentro do campo de arbítrio */}
+                {avaliacao && (
+                  <div className="mb-3 p-2.5 rounded bg-emerald-50 border border-emerald-200">
+                    <label className="text-[11px] text-emerald-800 font-semibold flex items-center gap-1">
+                      Valor adotado no laudo (opcional)
+                      <InfoHint titulo="Valor adotado" exp={EXPLICACOES.campo_arbitrio} />
+                    </label>
+                    <p className="text-[10px] text-emerald-700 mb-1">
+                      Padrão = valor do modelo ({brl(avaliacao.valor_estimado)}). Pode ajustar entre{' '}
+                      <b>{brl(avaliacao.campo_arbitrio[0])}</b> e <b>{brl(avaliacao.campo_arbitrio[1])}</b> (campo de arbítrio ±15%).
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        placeholder={String(Math.round(avaliacao.valor_estimado))}
+                        value={valorArbitrado ?? ''}
+                        onChange={(e) => setValorArbitrado(e.target.value === '' ? null : Number(e.target.value))}
+                        className="win-field w-[160px]"
+                      />
+                      {valorArbitrado != null && (
+                        valorArbitrado < avaliacao.campo_arbitrio[0] || valorArbitrado > avaliacao.campo_arbitrio[1] ? (
+                          <span className="text-[11px] text-red-600 font-medium">⚠ Fora do campo de arbítrio (±15%)</span>
+                        ) : (
+                          <span className="text-[11px] text-emerald-700">
+                            ✓ Dentro do aceitável ({(((valorArbitrado - avaliacao.valor_estimado) / avaliacao.valor_estimado) * 100).toFixed(1)}% vs. modelo)
+                          </span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
                   <input className="win-field" placeholder="Endereço" value={exportConfig.endereco} onChange={(e) => setExportConfig({ ...exportConfig, endereco: e.target.value })} />
                   <input className="win-field" placeholder="Avaliador" value={exportConfig.avaliador_nome} onChange={(e) => setExportConfig({ ...exportConfig, avaliador_nome: e.target.value })} />
@@ -410,10 +429,10 @@ export default function Backoffice() {
   )
 }
 
-function Mini({ label, value }: { label: string; value: string }) {
+function Mini({ label, value, exp }: { label: string; value: string; exp?: Explicacao }) {
   return (
     <div className="bg-white border border-[#d8d4c4] rounded-[3px] px-2 py-1">
-      <div className="text-[10px] text-[#888]">{label}</div>
+      <div className="text-[10px] text-[#888] flex items-center gap-1">{label}{exp && <InfoHint titulo={label} exp={exp} />}</div>
       <div className="text-[#333] font-medium">{value}</div>
     </div>
   )
