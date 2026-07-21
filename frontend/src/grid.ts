@@ -37,6 +37,61 @@ export function gridVazio(): GridState {
   return { colunas, linhas, avaliando }
 }
 
+/**
+ * Cria uma coluna calculada a partir de uma expressão com nomes de colunas.
+ * Ex.: "valor / area" cria o valor unitário. Operadores: + - * / ( ).
+ * Lança Error com mensagem clara se a expressão for inválida.
+ */
+export function operarVariaveis(g: GridState, nomeNova: string, expressao: string): GridState {
+  const nome = nomeNova.trim()
+  if (!nome) throw new Error('Informe o nome da nova variável.')
+  if (g.colunas.some((c) => c.nome === nome)) throw new Error(`Já existe uma coluna chamada "${nome}".`)
+
+  // Apenas nomes de colunas, números e operadores aritméticos
+  if (!/^[\w\s+\-*/().,]+$/.test(expressao)) {
+    throw new Error('Expressão inválida: use apenas nomes de colunas, números e + - * / ( ).')
+  }
+
+  // Ordena por comprimento p/ substituir nomes maiores primeiro (area_total antes de area)
+  const porNome = [...g.colunas].sort((a, b) => b.nome.length - a.nome.length)
+
+  const avaliar = (valores: Record<string, string>): number => {
+    let expr = expressao
+    for (const c of porNome) {
+      const v = Number(valores[c.id])
+      expr = expr.split(c.nome).join(`(${isFinite(v) ? v : 'NaN'})`)
+    }
+    if (/[a-zA-Z_]/.test(expr)) {
+      const resto = expr.match(/[a-zA-Z_]+/)?.[0]
+      throw new Error(`Variável desconhecida na expressão: "${resto}".`)
+    }
+    // eslint-disable-next-line no-new-func
+    const r = Function(`"use strict"; return (${expr});`)()
+    return typeof r === 'number' && isFinite(r) ? r : NaN
+  }
+
+  const col: Coluna = { id: novoId('col'), nome, papel: 'independente' }
+  const linhas = g.linhas.map((l) => {
+    let v: number
+    try { v = avaliar(l.valores) } catch (e) { throw e }
+    return { ...l, valores: { ...l.valores, [col.id]: isFinite(v) ? String(Math.round(v * 10000) / 10000) : '' } }
+  })
+
+  // Avaliando também (se possível)
+  let valorAvaliando = ''
+  try {
+    const va = avaliar(g.avaliando)
+    if (isFinite(va)) valorAvaliando = String(Math.round(va * 10000) / 10000)
+  } catch { /* avaliando incompleto: deixa vazio */ }
+
+  return {
+    ...g,
+    colunas: [...g.colunas, col],
+    linhas,
+    avaliando: { ...g.avaliando, [col.id]: valorAvaliando },
+  }
+}
+
 /** Acrescenta linhas de um CSV à grade atual, casando pelos nomes das colunas. */
 export function acrescentarCSV(g: GridState, registros: Record<string, unknown>[]): GridState {
   const novas: Linha[] = registros.map((reg) => {

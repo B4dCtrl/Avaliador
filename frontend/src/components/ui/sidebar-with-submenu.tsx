@@ -1,17 +1,20 @@
 import { useState, type ReactNode } from 'react'
 import {
-  Calculator, LayoutList, Bot, Wrench, HelpCircle, Settings,
-  ChevronDown, Pin, PinOff, LogOut, Home,
+  LayoutDashboard, Calculator, Database, GraduationCap, LayoutList, Bot,
+  Wrench, HelpCircle, Settings, ChevronDown, Pin, PinOff, LogOut, Home,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-export type SecaoApp = 'avaliador' | 'modelos' | 'assistente'
+export type SecaoApp = 'inicio' | 'avaliador' | 'modelos' | 'banco' | 'aprender' | 'assistente'
 
 interface MenuItem { id: SecaoApp; name: string; icon: ReactNode }
 
 const navigation: MenuItem[] = [
+  { id: 'inicio', name: 'Início', icon: <LayoutDashboard className="w-5 h-5" /> },
   { id: 'avaliador', name: 'Avaliador', icon: <Calculator className="w-5 h-5" /> },
   { id: 'modelos', name: 'Modelos', icon: <LayoutList className="w-5 h-5" /> },
+  { id: 'banco', name: 'Banco de imóveis', icon: <Database className="w-5 h-5" /> },
+  { id: 'aprender', name: 'Aprender', icon: <GraduationCap className="w-5 h-5" /> },
   { id: 'assistente', name: 'Assistente', icon: <Bot className="w-5 h-5" /> },
 ]
 

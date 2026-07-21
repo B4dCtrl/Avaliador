@@ -10,6 +10,7 @@ import {
   type GridState, gridVazio, gridDeCSV, acrescentarCSV, montarPayloadBestfit, montarImovelAlvo,
   reconsiderarTodas, desabilitarIndices,
 } from '../grid'
+import { carregarPerfil } from './Home'
 import DataGrid from '../components/DataGrid'
 import PainelAvaliando from '../components/PainelAvaliando'
 import ResultsPanel from '../components/ResultsPanel'
@@ -45,8 +46,12 @@ export default function Backoffice() {
   const [erro, setErro] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [salvoEm, setSalvoEm] = useState<string | null>(null)
-  const [exportConfig, setExportConfig] = useState<ExportConfig>({
-    endereco: '', data_avaliacao: new Date().toISOString().slice(0, 10), avaliador_nome: '', avaliador_crea: '',
+  const [exportConfig, setExportConfig] = useState<ExportConfig>(() => {
+    const perfil = carregarPerfil()
+    return {
+      endereco: '', data_avaliacao: new Date().toISOString().slice(0, 10),
+      avaliador_nome: perfil.nome, avaliador_crea: perfil.crea, avaliador_empresa: perfil.empresa,
+    }
   })
   const fileJSON = useRef<HTMLInputElement>(null)
 
@@ -156,10 +161,11 @@ export default function Backoffice() {
     if (!resultado) return
     try {
       const dep = grid.colunas.find((c) => c.papel === 'dependente')!
-      const r = await (tipo === 'word' ? exportarWord : exportarPDF)(bestfitParaExport(resultado, dep.nome), exportConfig)
+      const payload = bestfitParaExport(resultado, dep.nome, avaliacao, valorArbitrado)
+      const r = await (tipo === 'word' ? exportarWord : exportarPDF)(payload, exportConfig)
       await baixarArquivo(r.url_download, r.arquivo); flash(`Laudo ${tipo.toUpperCase()} baixado`)
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao exportar') }
-  }, [resultado, grid, exportConfig])
+  }, [resultado, grid, exportConfig, avaliacao, valorArbitrado])
 
   const novo = () => { setGrid(gridVazio()); setResultado(null); setAvaliacao(null); setNomeProjeto('Nova avaliação'); setPasso(1); flash('Novo projeto') }
   const salvar = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify({ nomeProjeto, grid, transfTestar, nivelConfianca })); flash('Projeto salvo') }
@@ -236,7 +242,7 @@ export default function Backoffice() {
           {passo === 1 && (
             <div className="space-y-2">
               <h2 className="text-[14px] font-bold text-[#0a3fb0]">Passo 1 — Informe as amostras</h2>
-              <p className="text-[12px] text-[#555]">Cada linha é um imóvel comparável. Use <b>Exemplo</b> para testar, ou importe um <b>CSV</b>. Marque o papel de cada coluna no cabeçalho (Valor Y / Variável X).</p>
+              <p className="text-[12px] text-[#555]">Cada linha é um imóvel comparável. Importe um <b>CSV</b> ou digite os dados. Marque o papel de cada coluna no cabeçalho (Valor Y / Variável X).</p>
               <DataGrid grid={grid} setGrid={setGrid} onImportCSV={handleImportCSV} onAppendCSV={handleAppendCSV} />
             </div>
           )}

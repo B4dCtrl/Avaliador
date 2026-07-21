@@ -184,6 +184,80 @@ def gerar_word(
         doc.add_paragraph(f"✗ {erro}", style="List Bullet")
     doc.add_paragraph()
 
+    # Grau de fundamentação por item (se disponível)
+    gf = resultado.get("grau_fundamentacao") or {}
+    itens_gf = gf.get("itens") or {}
+    if itens_gf:
+        _add_heading(doc, "5.1 Grau de Fundamentação (itens quantificáveis)", nivel=2)
+        doc.add_paragraph(f"Grau final (critério conservador): {gf.get('grau', '—')}")
+        rot = {
+            "quantidade_dados": "Quantidade de dados de mercado",
+            "significancia_regressores": "Significância dos regressores (t)",
+            "significancia_modelo_f": "Significância do modelo (F)",
+        }
+        for chave, info in itens_gf.items():
+            doc.add_paragraph(
+                f"{rot.get(chave, chave)}: grau {info.get('grau', '—')}",
+                style="List Bullet",
+            )
+        obs = gf.get("observacao")
+        if obs:
+            doc.add_paragraph(obs)
+        doc.add_paragraph()
+
+    # Avaliação do imóvel-alvo (se disponível)
+    aval = resultado.get("avaliacao_imovel") or {}
+    if aval:
+        _add_heading(doc, "5.2 Avaliação do Imóvel", nivel=2)
+        t = doc.add_table(rows=0, cols=2)
+        t.style = "Table Grid"
+
+        def linha(rotulo, valor):
+            cells = t.add_row().cells
+            cells[0].text = rotulo
+            cells[0].paragraphs[0].runs[0].bold = True
+            cells[1].text = valor
+
+        def moeda(v):
+            try:
+                return f"R$ {float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            except (TypeError, ValueError):
+                return "—"
+
+        linha("Valor estimado pelo modelo", moeda(aval.get("valor_estimado")))
+        va = aval.get("valor_adotado")
+        if va is not None:
+            linha("Valor adotado pelo avaliador", moeda(va))
+            try:
+                desvio = (float(va) / float(aval["valor_estimado"]) - 1) * 100
+                linha("Desvio em relação ao modelo", f"{desvio:+.1f}% (dentro do campo de arbítrio de ±15%)")
+            except (TypeError, ValueError, KeyError, ZeroDivisionError):
+                pass
+        ic_m = aval.get("intervalo_confianca_media")
+        if ic_m:
+            linha("Intervalo de confiança da média (80%)", f"{moeda(ic_m[0])} a {moeda(ic_m[1])}")
+        ic_p = aval.get("intervalo_predicao")
+        if ic_p:
+            linha("Intervalo de predição", f"{moeda(ic_p[0])} a {moeda(ic_p[1])}")
+        ca = aval.get("campo_arbitrio")
+        if ca:
+            linha("Campo de arbítrio (±15%)", f"{moeda(ca[0])} a {moeda(ca[1])}")
+        if aval.get("amplitude_pct") is not None:
+            linha("Amplitude do IC", f"{aval['amplitude_pct']}%")
+        if aval.get("grau_precisao"):
+            linha("Grau de precisão", str(aval["grau_precisao"]))
+        doc.add_paragraph()
+
+    # Poder de predição (se disponível)
+    pp = resultado.get("poder_predicao") or {}
+    if pp.get("observado"):
+        _add_heading(doc, "5.3 Poder de Predição", nivel=2)
+        doc.add_paragraph(
+            f"Desvio médio entre valores observados e estimados: {pp.get('desvio_medio_pct', 0)}%. "
+            f"Amostras com desvio dentro de ±20%: {pp.get('pct_dentro_20', 0)}%."
+        )
+        doc.add_paragraph()
+
     # Gráficos
     _add_heading(doc, "6. Gráficos", nivel=2)
     imagens = gerar_todos_graficos_png(
@@ -334,6 +408,75 @@ def gerar_pdf(
     for erro in validacao.get("erros", []):
         p(f"✗ {erro}")
     sp()
+
+    def _moeda(v):
+        try:
+            return f"R$ {float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except (TypeError, ValueError):
+            return "—"
+
+    gf = resultado.get("grau_fundamentacao") or {}
+    itens_gf = gf.get("itens") or {}
+    if itens_gf:
+        h2("5.1 Grau de Fundamentação (itens quantificáveis)")
+        p(f"Grau final (critério conservador): {gf.get('grau', '—')}")
+        rot = {
+            "quantidade_dados": "Quantidade de dados de mercado",
+            "significancia_regressores": "Significância dos regressores (t)",
+            "significancia_modelo_f": "Significância do modelo (F)",
+        }
+        for chave, info in itens_gf.items():
+            p(f"• {rot.get(chave, chave)}: grau {info.get('grau', '—')}")
+        if gf.get("observacao"):
+            p(gf["observacao"])
+        sp()
+
+    aval = resultado.get("avaliacao_imovel") or {}
+    if aval:
+        h2("5.2 Avaliação do Imóvel")
+        linhas_av = [["Item", "Valor"]]
+        linhas_av.append(["Valor estimado pelo modelo", _moeda(aval.get("valor_estimado"))])
+        va = aval.get("valor_adotado")
+        if va is not None:
+            linhas_av.append(["Valor adotado pelo avaliador", _moeda(va)])
+            try:
+                desvio = (float(va) / float(aval["valor_estimado"]) - 1) * 100
+                linhas_av.append(["Desvio vs. modelo", f"{desvio:+.1f}% (campo de arbítrio ±15%)"])
+            except (TypeError, ValueError, KeyError, ZeroDivisionError):
+                pass
+        if aval.get("intervalo_confianca_media"):
+            ic = aval["intervalo_confianca_media"]
+            linhas_av.append(["IC da média (80%)", f"{_moeda(ic[0])} a {_moeda(ic[1])}"])
+        if aval.get("intervalo_predicao"):
+            ic = aval["intervalo_predicao"]
+            linhas_av.append(["Intervalo de predição", f"{_moeda(ic[0])} a {_moeda(ic[1])}"])
+        if aval.get("campo_arbitrio"):
+            ca = aval["campo_arbitrio"]
+            linhas_av.append(["Campo de arbítrio (±15%)", f"{_moeda(ca[0])} a {_moeda(ca[1])}"])
+        if aval.get("amplitude_pct") is not None:
+            linhas_av.append(["Amplitude do IC", f"{aval['amplitude_pct']}%"])
+        if aval.get("grau_precisao"):
+            linhas_av.append(["Grau de precisão", str(aval["grau_precisao"])])
+        t_av = Table(linhas_av, colWidths=[8*cm, 8*cm])
+        t_av.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E40AF")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#EFF6FF")]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ]))
+        story.append(t_av)
+        sp()
+
+    pp_dados = resultado.get("poder_predicao") or {}
+    if pp_dados.get("observado"):
+        h2("5.3 Poder de Predição")
+        p(
+            f"Desvio médio entre observado e estimado: {pp_dados.get('desvio_medio_pct', 0)}%. "
+            f"Amostras dentro de ±20%: {pp_dados.get('pct_dentro_20', 0)}%."
+        )
+        sp()
 
     h2("6. Gráficos")
     imagens = gerar_todos_graficos_png(resultado.get("graficos", {}))

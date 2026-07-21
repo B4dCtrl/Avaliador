@@ -259,10 +259,28 @@ export async function exportarPDF(
  * Converte response do bestfit em payload aceito pelos endpoints
  * de export do backend (que esperam o formato do /api/calcular-regressao).
  */
-export function bestfitParaExport(b: BestfitResponse, varDep: string): object {
+export function bestfitParaExport(
+  b: BestfitResponse,
+  varDep: string,
+  avaliacao?: AvaliarImovelResponse | null,
+  valorAdotado?: number | null,
+): object {
   const m = b.melhor_modelo
   return {
     status: 'sucesso',
+    grau_fundamentacao: b.grau_fundamentacao,
+    poder_predicao: b.poder_predicao ?? undefined,
+    avaliacao_imovel: avaliacao
+      ? {
+          valor_estimado: avaliacao.valor_estimado,
+          valor_adotado: valorAdotado ?? undefined,
+          intervalo_confianca_media: avaliacao.intervalo_confianca_media,
+          intervalo_predicao: avaliacao.intervalo_predicao,
+          campo_arbitrio: avaliacao.campo_arbitrio,
+          amplitude_pct: avaliacao.amplitude_pct,
+          grau_precisao: avaliacao.grau_precisao,
+        }
+      : undefined,
     regressao: {
       r_squared: m.r2,
       r_ajustado: m.r2_ajustado,

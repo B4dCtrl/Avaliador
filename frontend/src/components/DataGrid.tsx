@@ -1,6 +1,7 @@
-import { Plus, Trash2, Upload, FilePlus2, Eraser, Tag } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Trash2, Upload, FilePlus2, Eraser, Tag, Sigma } from 'lucide-react'
 import type { ChangeEvent } from 'react'
-import { type Coluna, type GridState, type PapelColuna, novoId } from '../grid'
+import { type Coluna, type GridState, type PapelColuna, novoId, operarVariaveis } from '../grid'
 
 interface Props {
   grid: GridState
@@ -23,6 +24,20 @@ const PAPEL_COR: Record<PapelColuna, string> = {
 
 export default function DataGrid({ grid, setGrid, onImportCSV, onAppendCSV }: Props) {
   const { colunas, linhas } = grid
+  const [operarAberto, setOperarAberto] = useState(false)
+  const [opNome, setOpNome] = useState('')
+  const [opExpr, setOpExpr] = useState('')
+  const [opErro, setOpErro] = useState<string | null>(null)
+
+  const aplicarOperacao = () => {
+    setOpErro(null)
+    try {
+      setGrid(operarVariaveis(grid, opNome, opExpr))
+      setOperarAberto(false); setOpNome(''); setOpExpr('')
+    } catch (e) {
+      setOpErro(e instanceof Error ? e.message : 'Expressão inválida')
+    }
+  }
 
   // ---- operações ----
   const setCelula = (linId: string, colId: string, valor: string) => {
@@ -119,8 +134,45 @@ export default function DataGrid({ grid, setGrid, onImportCSV, onAppendCSV }: Pr
           <FilePlus2 size={14} /> CSV +
           <input type="file" accept=".csv" onChange={onAppendCSV} className="hidden" />
         </label>
+        <button onClick={() => setOperarAberto(!operarAberto)} className="btn-grid" title="Criar variável calculada">
+          <Sigma size={14} /> Operar
+        </button>
         <button onClick={limpar} className="btn-grid"><Eraser size={14} /> Limpar</button>
       </div>
+
+      {/* Painel Operar variáveis */}
+      {operarAberto && (
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-blue-50/60 dark:bg-blue-500/10">
+          <div className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <Sigma size={14} /> Criar variável calculada
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-[10px] text-slate-500 mb-0.5">Nome da nova variável</label>
+              <input value={opNome} onChange={(e) => setOpNome(e.target.value)}
+                placeholder="valor_unitario"
+                className="px-2 py-1 text-[12px] border border-slate-300 rounded w-[160px] dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600" />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[10px] text-slate-500 mb-0.5">
+                Expressão (use os nomes das colunas: {colunas.map((c) => c.nome).join(', ')})
+              </label>
+              <input value={opExpr} onChange={(e) => setOpExpr(e.target.value)}
+                placeholder={`${colunas[0]?.nome ?? 'valor'} / ${colunas[1]?.nome ?? 'area'}`}
+                className="px-2 py-1 text-[12px] border border-slate-300 rounded w-full font-mono dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600" />
+            </div>
+            <button onClick={aplicarOperacao}
+              className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-medium">
+              Criar coluna
+            </button>
+            <button onClick={() => { setOperarAberto(false); setOpErro(null) }}
+              className="px-3 py-1.5 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 text-[12px]">
+              Cancelar
+            </button>
+          </div>
+          {opErro && <div className="text-[11px] text-red-600 mt-1">{opErro}</div>}
+        </div>
+      )}
 
       {/* Tabela */}
       <div className="overflow-auto max-h-[480px]">

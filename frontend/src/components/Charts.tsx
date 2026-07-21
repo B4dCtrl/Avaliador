@@ -21,6 +21,9 @@ export default function Charts({ resultado }: Props) {
   })
 
   const pp = resultado.poder_predicao
+  // Resíduos padronizados (do backend; fallback: calcula localmente)
+  const dp = stdev(residuos) || 1
+  const rp = m.residuos_padronizados ?? residuos.map((r) => r / dp)
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -136,20 +139,35 @@ export default function Charts({ resultado }: Props) {
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:col-span-2">
-        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Resíduos ao longo do índice</h4>
+        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Resíduos padronizados por amostra</h4>
+        <p className="text-[11px] text-slate-500 mb-2">
+          Pontos fora das faixas de ±2 desvios-padrão são candidatos a outlier (norma recomenda investigar).
+        </p>
         <Plot
-          data={[{
-            x: residuos.map((_, i) => i),
-            y: residuos,
-            type: 'bar',
-            marker: { color: residuos.map((r) => (Math.abs(r) > 2 * stdev(residuos) ? '#ef4444' : '#2563EB')) },
-          }]}
+          data={[
+            {
+              x: rp.map((_, i) => i + 1),
+              y: rp,
+              mode: 'markers',
+              type: 'scatter',
+              marker: {
+                size: 9,
+                color: rp.map((r) => (Math.abs(r) > 2 ? '#ef4444' : '#2563EB')),
+              },
+              name: 'Resíduo padronizado',
+            },
+          ]}
           layout={{
             margin: { t: 10, l: 50, r: 10, b: 40 },
-            xaxis: { title: { text: 'Observação' } },
-            yaxis: { title: { text: 'Resíduo' } },
+            xaxis: { title: { text: 'Amostra' }, dtick: 1 },
+            yaxis: { title: { text: 'Resíduo padronizado' }, zeroline: true },
+            shapes: [
+              { type: 'line', x0: 0.5, x1: rp.length + 0.5, y0: 2, y1: 2, line: { color: '#ef4444', dash: 'dash', width: 1 } },
+              { type: 'line', x0: 0.5, x1: rp.length + 0.5, y0: -2, y1: -2, line: { color: '#ef4444', dash: 'dash', width: 1 } },
+            ],
             autosize: true,
-            height: 240,
+            height: 260,
+            showlegend: false,
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
             font: { color: '#475569' },
