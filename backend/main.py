@@ -34,6 +34,7 @@ from calculadora import (
 from diagnosticos import diagnostico_completo
 from exportador import gerar_pdf, gerar_word
 from analise import analisar_amostras
+from saneamento import DadosInvalidos, sanear_dataset
 from models import (
     AnalisarAmostrasRequest,
     AvaliarImovelRequest,
@@ -250,10 +251,14 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
         len(request.dados),
     )
 
-    df = pd.DataFrame(request.dados)
-    faltando = [c for c in [request.variavel_dependente, *request.variaveis_independentes] if c not in df.columns]
-    if faltando:
-        raise HTTPException(status_code=422, detail=f"Colunas ausentes nos dados: {faltando}")
+    try:
+        dados_limpos, avisos_saneamento = sanear_dataset(
+            request.dados, request.variavel_dependente, request.variaveis_independentes
+        )
+    except DadosInvalidos as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    df = pd.DataFrame(dados_limpos)
 
     ranking = bestfit(
         df,
@@ -351,6 +356,7 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
         "grau_fundamentacao": grau_fund,
         "ranking": serializar_ranking(ranking),
         "n_modelos_testados": len(ranking),
+        "avisos": avisos_saneamento,
     }
 
 
@@ -364,14 +370,15 @@ def analisar_amostras_endpoint(request: AnalisarAmostrasRequest) -> Dict[str, An
     Analisa as amostras após o ajuste e recomenda quais desabilitar
     (outliers / atípicas), considerando o imóvel-alvo se informado.
     """
-    df_cols = [request.variavel_dependente, *request.variaveis_independentes]
-    if request.dados:
-        faltando = [c for c in df_cols if c not in request.dados[0]]
-        if faltando:
-            raise HTTPException(status_code=422, detail=f"Colunas ausentes: {faltando}")
+    try:
+        dados_limpos, _ = sanear_dataset(
+            request.dados, request.variavel_dependente, request.variaveis_independentes
+        )
+    except DadosInvalidos as e:
+        raise HTTPException(status_code=422, detail=str(e))
     try:
         return analisar_amostras(
-            dados=request.dados,
+            dados=dados_limpos,
             variavel_dependente=request.variavel_dependente,
             variaveis_independentes=request.variaveis_independentes,
             transformacoes=request.transformacoes,
@@ -396,13 +403,15 @@ def avaliar_imovel(request: AvaliarImovelRequest) -> Dict[str, Any]:
     import statsmodels.api as sm
     from calculadora import transformar_variavel
 
-    df = pd.DataFrame(request.dados)
     y_name = request.variavel_dependente
     x_names = request.variaveis_independentes
 
-    faltando = [c for c in [y_name, *x_names] if c not in df.columns]
-    if faltando:
-        raise HTTPException(status_code=422, detail=f"Colunas ausentes: {faltando}")
+    try:
+        dados_limpos, _ = sanear_dataset(request.dados, y_name, x_names)
+    except DadosInvalidos as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    df = pd.DataFrame(dados_limpos)
 
     if request.excluir_indices:
         df = df.drop(index=[i for i in request.excluir_indices if i in df.index])
