@@ -93,6 +93,12 @@ def bestfit(
             X = sm.add_constant(transformado[x_names], has_constant="add")
             modelo = sm.OLS(y, X).fit()
 
+            # p-valor máximo dos regressores (sem intercepto) — dá o grau t do modelo
+            pvals_indep = [
+                float(modelo.pvalues[c]) for c in modelo.params.index if c != "const"
+            ]
+            max_p = max(pvals_indep) if pvals_indep else 1.0
+
             results.append({
                 "id": len(results) + 1,
                 "transformacoes": {var: combo[i] for i, var in enumerate(var_names)},
@@ -102,6 +108,7 @@ def bestfit(
                 "f_p_valor": round(float(modelo.f_pvalue), 8),
                 "aic": round(float(modelo.aic), 4),
                 "bic": round(float(modelo.bic), 4),
+                "max_p_valor": round(max_p, 4),
                 "_modelo": modelo,
                 "_dados_usados": transformado,
             })

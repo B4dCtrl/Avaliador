@@ -85,6 +85,9 @@ class BestfitRequest(BaseModel):
     excluir_indices: List[int] = []
     nivel_confianca: float = Field(default=0.80, ge=0.50, le=0.99)
     top_n: int = 20
+    # Arbítrio do avaliador: usar este modelo (ranking) em vez do melhor por AIC.
+    # Dicionário {variavel: transformacao} igual ao campo "transformacoes" do ranking.
+    transformacoes_escolhidas: Optional[Dict[str, str]] = None
 
 
 class AvaliarImovelRequest(BaseModel):

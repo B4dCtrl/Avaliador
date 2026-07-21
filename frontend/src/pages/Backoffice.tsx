@@ -40,6 +40,8 @@ export default function Backoffice() {
   const [loading, setLoading] = useState(false)
   const [resultado, setResultado] = useState<BestfitResponse | null>(null)
   const [avaliacao, setAvaliacao] = useState<AvaliarImovelResponse | null>(null)
+  // Arbítrio do avaliador: valor final escolhido dentro do campo de arbítrio (±15%)
+  const [valorArbitrado, setValorArbitrado] = useState<number | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [salvoEm, setSalvoEm] = useState<string | null>(null)
@@ -95,16 +97,21 @@ export default function Backoffice() {
     e.target.value = ''
   }, [])
 
-  // Calcular + (se possível) estimar o imóvel automaticamente
-  const handleCalcular = useCallback(async () => {
+  // Calcular + (se possível) estimar o imóvel automaticamente.
+  // transformacoesEscolhidas: arbítrio do avaliador (usar modelo do ranking).
+  const handleCalcular = useCallback(async (
+    transformacoesEscolhidas?: Record<string, string>,
+  ) => {
     setErro(null)
     let payload
     try { payload = montarPayloadBestfit(grid, transfTestar, nivelConfianca) }
     catch (e) { setErro(e instanceof Error ? e.message : 'Dados inválidos'); return }
+    if (transformacoesEscolhidas) payload = { ...payload, transformacoes_escolhidas: transformacoesEscolhidas }
     setLoading(true)
     try {
       const res = await calcularBestfit(payload)
       setResultado(res)
+      setValorArbitrado(null)
       const alvo = montarImovelAlvo(grid)
       if (alvo) {
         try {
@@ -119,6 +126,7 @@ export default function Backoffice() {
         } catch { setAvaliacao(null) }
       } else { setAvaliacao(null) }
       setPasso(4)
+      if (transformacoesEscolhidas) flash('Avaliação recalculada com o modelo escolhido')
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro no cálculo') }
     finally { setLoading(false) }
   }, [grid, transfTestar, nivelConfianca])
@@ -272,7 +280,7 @@ export default function Backoffice() {
                 </div>
               )}
 
-              <button onClick={handleCalcular} disabled={loading} className="win-btn win-btn-primary flex items-center gap-2 text-[13px] px-5 py-2">
+              <button onClick={() => handleCalcular()} disabled={loading} className="win-btn win-btn-primary flex items-center gap-2 text-[13px] px-5 py-2">
                 <Calculator size={16} /> {loading ? 'Calculando…' : 'Calcular regressão'}
               </button>
             </div>
@@ -284,11 +292,42 @@ export default function Backoffice() {
 
               {avaliacao ? (
                 <div className="rounded-[4px] border-2 border-amber-400 bg-gradient-to-b from-amber-50 to-amber-100/60 p-4">
-                  <div className="text-[12px] text-amber-800 font-semibold">Valor estimado do imóvel</div>
-                  <div className="text-[30px] font-bold text-[#0a3fb0] leading-tight">{brl(avaliacao.valor_estimado)}</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[12px]">
+                  <div className="flex flex-wrap items-start gap-6">
+                    <div>
+                      <div className="text-[12px] text-amber-800 font-semibold">Valor estimado (modelo)</div>
+                      <div className="text-[30px] font-bold text-[#0a3fb0] leading-tight">{brl(avaliacao.valor_estimado)}</div>
+                    </div>
+                    <div className="flex-1 min-w-[260px]">
+                      <div className="text-[12px] text-amber-800 font-semibold">
+                        Valor adotado pelo avaliador <span className="font-normal">(campo de arbítrio ±15%)</span>
+                      </div>
+                      <div className="text-[24px] font-bold text-emerald-700 leading-tight">
+                        {brl(valorArbitrado ?? avaliacao.valor_estimado)}
+                        {valorArbitrado != null && valorArbitrado !== avaliacao.valor_estimado && (
+                          <span className="ml-2 text-[11px] font-medium text-emerald-800 bg-emerald-100 border border-emerald-300 rounded px-1.5 py-0.5 align-middle">
+                            {(((valorArbitrado - avaliacao.valor_estimado) / avaliacao.valor_estimado) * 100).toFixed(1)}% vs. modelo
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="range"
+                        min={Math.round(avaliacao.campo_arbitrio[0])}
+                        max={Math.round(avaliacao.campo_arbitrio[1])}
+                        step={100}
+                        value={valorArbitrado ?? avaliacao.valor_estimado}
+                        onChange={(e) => setValorArbitrado(Number(e.target.value))}
+                        className="w-full accent-emerald-600 mt-1"
+                      />
+                      <div className="flex justify-between text-[10px] text-amber-800">
+                        <span>{brl(avaliacao.campo_arbitrio[0])}</span>
+                        <button onClick={() => setValorArbitrado(null)} className="underline hover:text-amber-950">voltar ao valor do modelo</button>
+                        <span>{brl(avaliacao.campo_arbitrio[1])}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-[12px]">
                     <Mini label={`Predição ${(avaliacao.nivel_confianca * 100).toFixed(0)}%`} value={`${brl(avaliacao.intervalo_predicao[0])} – ${brl(avaliacao.intervalo_predicao[1])}`} />
-                    <Mini label="Campo arbítrio" value={`${brl(avaliacao.campo_arbitrio[0])} – ${brl(avaliacao.campo_arbitrio[1])}`} />
+                    <Mini label="IC da média" value={`${brl(avaliacao.intervalo_confianca_media[0])} – ${brl(avaliacao.intervalo_confianca_media[1])}`} />
                     <Mini label="Amplitude" value={`${avaliacao.amplitude_pct}%`} />
                     <Mini label="Grau precisão" value={avaliacao.grau_precisao} />
                   </div>
@@ -317,7 +356,7 @@ export default function Backoffice() {
                 </div>
               )}
 
-              <ResultsPanel resultado={resultado} />
+              <ResultsPanel resultado={resultado} onUsarModelo={(t) => handleCalcular(t)} loading={loading} />
               <TabelaResultados resultado={resultado} grid={grid} />
               <Charts resultado={resultado} dados={[]} varDependente="" />
 
@@ -347,7 +386,7 @@ export default function Backoffice() {
               className="win-btn win-btn-primary flex items-center gap-1">Avançar <ChevronRight size={14} /></button>
           )}
           {passo === 3 && (
-            <button onClick={handleCalcular} disabled={loading}
+            <button onClick={() => handleCalcular()} disabled={loading}
               className="win-btn win-btn-primary flex items-center gap-1">{loading ? 'Calculando…' : 'Calcular ▶'}</button>
           )}
           {passo === 4 && (

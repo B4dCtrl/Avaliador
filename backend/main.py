@@ -273,7 +273,19 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
     if not ranking:
         raise HTTPException(status_code=422, detail="Nenhum modelo válido encontrado.")
 
+    # Arbítrio do avaliador: usar o modelo escolhido do ranking, se indicado
     melhor = ranking[0]
+    if request.transformacoes_escolhidas:
+        escolhido = next(
+            (r for r in ranking if r["transformacoes"] == request.transformacoes_escolhidas),
+            None,
+        )
+        if escolhido is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Modelo escolhido não encontrado no ranking. Recalcule e escolha novamente.",
+            )
+        melhor = escolhido
     modelo = melhor["_modelo"]
     dados_usados = melhor["_dados_usados"]
     transf_y = melhor["transformacoes"][request.variavel_dependente]
@@ -332,6 +344,22 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
         x: [float(r[x]) for r in dados_limpos] for x in request.variaveis_independentes
     })
 
+    # Sugestões de refinamento (stepwise manual): variáveis fracas
+    sugestoes: list = []
+    for c in modelo.params.index:
+        if c == "const":
+            continue
+        p = float(modelo.pvalues[c])
+        if p > 0.30:
+            sugestoes.append(
+                f"A variável '{c}' não atinge nem o grau I (p = {p:.2%}). "
+                "Considere removê-la e recalcular."
+            )
+
+    # Resíduos padronizados do modelo em uso
+    _dp_resid = float(np.std(modelo.resid, ddof=1)) or 1.0
+    residuos_padronizados = [round(float(r) / _dp_resid, 4) for r in modelo.resid]
+
     # Grau de fundamentação completo
     pvalores_indep = [
         float(modelo.pvalues[c]) for c in modelo.params.index if c != "const"
@@ -368,7 +396,9 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
                 for nome in modelo.params.index if nome != "const"
             ],
             "residuos": [round(float(r), 6) for r in modelo.resid],
+            "residuos_padronizados": residuos_padronizados,
             "valores_ajustados": [round(float(v), 6) for v in modelo.fittedvalues],
+            "modelo_escolhido_pelo_avaliador": request.transformacoes_escolhidas is not None,
         },
         "diagnosticos": diagnosticos,
         "amplitude_pct": amp,
@@ -380,7 +410,7 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
         "n_modelos_testados": len(ranking),
         "poder_predicao": poder_predicao,
         "micronumerosidade": micro,
-        "avisos": avisos_saneamento + micro["avisos"],
+        "avisos": avisos_saneamento + micro["avisos"] + sugestoes,
     }
 
 

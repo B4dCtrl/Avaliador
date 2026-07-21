@@ -1,8 +1,22 @@
 import type { BestfitResponse } from '../api'
 
-interface Props { resultado: BestfitResponse }
+interface Props {
+  resultado: BestfitResponse
+  /** Arbítrio do avaliador: recalcular usando o modelo clicado do ranking */
+  onUsarModelo?: (transformacoes: Record<string, string>) => void
+  loading?: boolean
+}
 
 function fmt(n: number, d = 4) { return Number.isFinite(n) ? n.toFixed(d) : '—' }
+
+/** Grau t do modelo pelo p-valor máximo dos regressores (NBR: 10/20/30%). */
+function grauT(maxP?: number): { label: string; cor: string } {
+  if (maxP == null) return { label: '—', cor: 'text-slate-400' }
+  if (maxP <= 0.10) return { label: 'III', cor: 'text-emerald-700 dark:text-emerald-400 font-semibold' }
+  if (maxP <= 0.20) return { label: 'II', cor: 'text-amber-700 dark:text-amber-400 font-semibold' }
+  if (maxP <= 0.30) return { label: 'I', cor: 'text-orange-700 dark:text-orange-400 font-semibold' }
+  return { label: 'Fora', cor: 'text-red-600 font-semibold' }
+}
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -14,9 +28,10 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   )
 }
 
-export default function ResultsPanel({ resultado }: Props) {
+export default function ResultsPanel({ resultado, onUsarModelo, loading }: Props) {
   const m = resultado.melhor_modelo
   const d = resultado.diagnosticos
+  const emUso = JSON.stringify(m.transformacoes)
 
   return (
     <div className="space-y-4">
@@ -99,7 +114,13 @@ export default function ResultsPanel({ resultado }: Props) {
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4">
-        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Ranking (top {resultado.ranking.length})</h3>
+        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
+          Modelos calculados ({resultado.ranking.length})
+        </h3>
+        <p className="text-[11px] text-slate-500 mb-2">
+          O avaliador pode escolher outro modelo — por exemplo, aceitar um grau II com R² maior.
+          Clique em <b>Usar</b> para recalcular a avaliação com aquele modelo.
+        </p>
         <div className="overflow-auto max-h-72">
           <table className="w-full text-xs">
             <thead className="sticky top-0">
@@ -109,26 +130,46 @@ export default function ResultsPanel({ resultado }: Props) {
                 <th className="px-2 py-1.5 text-right">R²</th>
                 <th className="px-2 py-1.5 text-right">R² aj.</th>
                 <th className="px-2 py-1.5 text-right">AIC</th>
-                <th className="px-2 py-1.5 text-right">BIC</th>
+                <th className="px-2 py-1.5 text-center">Grau t</th>
+                {onUsarModelo && <th className="px-2 py-1.5 text-center">Ação</th>}
               </tr>
             </thead>
             <tbody>
-              {resultado.ranking.map((r) => (
-                <tr key={r.id} className="border-b border-slate-100 dark:border-slate-700">
-                  <td className="px-2 py-1.5">{r.id}</td>
-                  <td className="px-2 py-1.5">
-                    {Object.entries(r.transformacoes).map(([v, t]) => (
-                      <span key={v} className="inline-block bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded mr-1 mb-0.5">
-                        {v}:{t}
-                      </span>
-                    ))}
-                  </td>
-                  <td className="px-2 py-1.5 text-right">{fmt(r.r2, 4)}</td>
-                  <td className="px-2 py-1.5 text-right">{fmt(r.r2_ajustado, 4)}</td>
-                  <td className="px-2 py-1.5 text-right">{fmt(r.aic, 1)}</td>
-                  <td className="px-2 py-1.5 text-right">{fmt(r.bic, 1)}</td>
-                </tr>
-              ))}
+              {resultado.ranking.map((r) => {
+                const ativo = JSON.stringify(r.transformacoes) === emUso
+                const g = grauT(r.max_p_valor)
+                return (
+                  <tr key={r.id}
+                    className={`border-b border-slate-100 dark:border-slate-700 ${ativo ? 'bg-blue-50 dark:bg-blue-500/10' : ''}`}>
+                    <td className="px-2 py-1.5">{ativo ? '►' : ''} {r.id}</td>
+                    <td className="px-2 py-1.5">
+                      {Object.entries(r.transformacoes).map(([v, t]) => (
+                        <span key={v} className="inline-block bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded mr-1 mb-0.5">
+                          {v}:{t}
+                        </span>
+                      ))}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">{fmt(r.r2, 4)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmt(r.r2_ajustado, 4)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmt(r.aic, 1)}</td>
+                    <td className={`px-2 py-1.5 text-center ${g.cor}`}>{g.label}</td>
+                    {onUsarModelo && (
+                      <td className="px-2 py-1.5 text-center">
+                        {ativo ? (
+                          <span className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold">em uso</span>
+                        ) : (
+                          <button
+                            onClick={() => onUsarModelo(r.transformacoes)}
+                            disabled={loading}
+                            className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white text-[10px]">
+                            Usar
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -14,6 +14,8 @@ export interface BestfitRequest {
   excluir_indices?: number[]
   nivel_confianca?: number
   top_n?: number
+  /** Arbítrio do avaliador: usar este modelo do ranking em vez do melhor por AIC */
+  transformacoes_escolhidas?: Record<string, string> | null
 }
 
 export interface RankingItem {
@@ -25,6 +27,7 @@ export interface RankingItem {
   f_p_valor: number
   aic: number
   bic: number
+  max_p_valor?: number
 }
 
 export interface CoeficienteBestfit {
@@ -50,7 +53,9 @@ export interface BestfitResponse {
     intercepto: number
     coeficientes: CoeficienteBestfit[]
     residuos: number[]
+    residuos_padronizados?: number[]
     valores_ajustados: number[]
+    modelo_escolhido_pelo_avaliador?: boolean
   }
   diagnosticos: {
     shapiro_wilk: { stat: number; p_valor: number }
