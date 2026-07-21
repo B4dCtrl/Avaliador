@@ -24,7 +24,10 @@ const TRANSFORMACOES = [
   { value: 'quadrada', label: 'x²' },
 ]
 const STORAGE_KEY = 'avaliador_projeto_v1'
-const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+const brl = (n: number | null | undefined) =>
+  n == null || !Number.isFinite(n)
+    ? '—'
+    : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 
 const PASSOS = ['Dados', 'Imóvel', 'Calcular', 'Resultado']
 

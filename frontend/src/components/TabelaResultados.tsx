@@ -6,7 +6,8 @@ interface Props {
   grid: GridState
 }
 
-function fmt(n: number, casas = 2) {
+function fmt(n: number | null | undefined, casas = 2) {
+  if (n == null || !Number.isFinite(n)) return '—'
   return n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
 }
 

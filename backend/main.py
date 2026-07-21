@@ -520,6 +520,17 @@ def avaliar_imovel(request: AvaliarImovelRequest) -> Dict[str, Any]:
     ic_conf_inf = float(transformacao_inversa(np.array([mean_lwr_t]), transf_y)[0])
     ic_conf_sup = float(transformacao_inversa(np.array([mean_upr_t]), transf_y)[0])
 
+    # Integridade: nenhum valor do laudo pode ser NaN/infinito
+    import math as _math
+    if any(_math.isnan(v) or _math.isinf(v) for v in
+           [valor, ic_pred_inf, ic_pred_sup, ic_conf_inf, ic_conf_sup]):
+        raise HTTPException(
+            status_code=422,
+            detail=("Não foi possível estimar o valor com este modelo para o imóvel "
+                    "informado (a transformação gerou um resultado inválido). "
+                    "Tente outro modelo no ranking ou revise as características do imóvel."),
+        )
+
     # Ordena limites (transformações inversas podem inverter ordem)
     pred_inf, pred_sup = sorted([ic_pred_inf, ic_pred_sup])
     conf_inf, conf_sup = sorted([ic_conf_inf, ic_conf_sup])
