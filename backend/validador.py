@@ -63,12 +63,17 @@ def validar_nbr_14653(
             f"R² = {r_squared:.4f} está abaixo do recomendado pela NBR 14653-02 (≥ {R2_MINIMO})."
         )
 
-    # 3. Significância dos coeficientes
+    # 3. Significância dos coeficientes (níveis da NBR: 10% III, 20% II, 30% I)
     for nome, p in zip(nomes_variaveis, p_valores_coefs):
-        if p > P_VALOR_SIGNIFICANCIA:
+        if p > 0.30:
             avisos.append(
-                f"Variável '{nome}' não é significativa a 5% (p-valor = {p:.4f}). "
-                "Considere remover ou revisar a transformação."
+                f"Variável '{nome}' não atinge nem o grau I de fundamentação "
+                f"(p-valor = {p:.4f} > 30%). Considere remover ou revisar a transformação."
+            )
+        elif p > 0.10:
+            avisos.append(
+                f"Variável '{nome}' com significância limitada (p-valor = {p:.4f}; "
+                "grau III exige ≤ 10%)."
             )
 
     # 4. Multicolinearidade

@@ -20,8 +20,56 @@ export default function Charts({ resultado }: Props) {
     return Math.sqrt(2) * inverseErf(2 * p - 1)
   })
 
+  const pp = resultado.poder_predicao
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {pp && pp.observado.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:col-span-2">
+          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">
+            Poder de predição — Observado × Estimado
+          </h4>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Desvio médio: <b>{pp.desvio_medio_pct}%</b> · Dentro de ±20%: <b>{pp.pct_dentro_20}%</b> das amostras.
+            Quanto mais próximos da reta de 45°, melhor o modelo.
+          </p>
+          <Plot
+            data={[
+              {
+                x: pp.observado,
+                y: pp.estimado,
+                mode: 'markers',
+                type: 'scatter',
+                marker: { color: '#2563EB', size: 8 },
+                name: 'Amostras',
+              },
+              {
+                x: [Math.min(...pp.observado), Math.max(...pp.observado)],
+                y: [Math.min(...pp.observado), Math.max(...pp.observado)],
+                mode: 'lines',
+                type: 'scatter',
+                line: { color: '#ef4444', dash: 'dash' },
+                name: 'Reta 45° (ideal)',
+              },
+            ]}
+            layout={{
+              margin: { t: 10, l: 60, r: 10, b: 40 },
+              xaxis: { title: { text: 'Valor observado' } },
+              yaxis: { title: { text: 'Valor estimado' } },
+              autosize: true,
+              height: 300,
+              showlegend: false,
+              paper_bgcolor: 'rgba(0,0,0,0)',
+              plot_bgcolor: 'rgba(0,0,0,0)',
+              font: { color: '#475569' },
+            }}
+            config={{ displayModeBar: false, responsive: true }}
+            style={{ width: '100%' }}
+            useResizeHandler
+          />
+        </div>
+      )}
+
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4">
         <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Resíduos × Ajustados</h4>
         <Plot

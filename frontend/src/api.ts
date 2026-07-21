@@ -72,6 +72,18 @@ export interface BestfitResponse {
   }
   ranking: RankingItem[]
   n_modelos_testados: number
+  poder_predicao?: {
+    observado: number[]
+    estimado: number[]
+    desvio_medio_pct: number
+    pct_dentro_20: number
+  } | null
+  micronumerosidade?: {
+    ok: boolean
+    avisos: string[]
+    detalhes: Record<string, { niveis: Record<string, number>; minimo_exigido: number; ok: boolean }>
+  }
+  avisos?: string[]
 }
 
 export async function calcularBestfit(req: BestfitRequest): Promise<BestfitResponse> {

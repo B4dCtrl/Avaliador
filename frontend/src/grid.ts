@@ -37,26 +37,6 @@ export function gridVazio(): GridState {
   return { colunas, linhas, avaliando }
 }
 
-export function gridExemplo(): GridState {
-  const amostras = [
-    [150000, 100, 500], [200000, 150, 1000], [175000, 120, 800], [220000, 160, 1200],
-    [185000, 130, 900], [160000, 105, 600], [210000, 155, 1100], [195000, 135, 850],
-    [230000, 165, 1300], [170000, 110, 700], [155000, 102, 550], [215000, 158, 1050],
-    [180000, 125, 820], [225000, 162, 1250], [190000, 132, 920],
-  ]
-  const cV: Coluna = { id: novoId('col'), nome: 'preco', papel: 'dependente' }
-  const cA: Coluna = { id: novoId('col'), nome: 'area', papel: 'independente' }
-  const cD: Coluna = { id: novoId('col'), nome: 'distancia', papel: 'independente' }
-  const colunas = [cV, cA, cD]
-  const linhas: Linha[] = amostras.map(([p, a, d]) => ({
-    id: novoId('lin'),
-    valores: { [cV.id]: String(p), [cA.id]: String(a), [cD.id]: String(d) },
-    excluida: false,
-  }))
-  const avaliando = { [cV.id]: '', [cA.id]: '140', [cD.id]: '950' }
-  return { colunas, linhas, avaliando }
-}
-
 /** Acrescenta linhas de um CSV à grade atual, casando pelos nomes das colunas. */
 export function acrescentarCSV(g: GridState, registros: Record<string, unknown>[]): GridState {
   const novas: Linha[] = registros.map((reg) => {

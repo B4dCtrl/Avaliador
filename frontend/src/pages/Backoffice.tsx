@@ -7,7 +7,7 @@ import {
   type BestfitResponse, type AvaliarImovelResponse, type ExportConfig,
 } from '../api'
 import {
-  type GridState, gridVazio, gridExemplo, gridDeCSV, acrescentarCSV, montarPayloadBestfit, montarImovelAlvo,
+  type GridState, gridVazio, gridDeCSV, acrescentarCSV, montarPayloadBestfit, montarImovelAlvo,
   reconsiderarTodas, desabilitarIndices,
 } from '../grid'
 import DataGrid from '../components/DataGrid'
@@ -93,10 +93,6 @@ export default function Backoffice() {
       error: () => setErro('Erro ao ler CSV'),
     })
     e.target.value = ''
-  }, [])
-
-  const carregarExemplo = useCallback(() => {
-    setGrid(gridExemplo()); setResultado(null); setAvaliacao(null); flash('Dados de exemplo carregados')
   }, [])
 
   // Calcular + (se possível) estimar o imóvel automaticamente
@@ -233,7 +229,7 @@ export default function Backoffice() {
             <div className="space-y-2">
               <h2 className="text-[14px] font-bold text-[#0a3fb0]">Passo 1 — Informe as amostras</h2>
               <p className="text-[12px] text-[#555]">Cada linha é um imóvel comparável. Use <b>Exemplo</b> para testar, ou importe um <b>CSV</b>. Marque o papel de cada coluna no cabeçalho (Valor Y / Variável X).</p>
-              <DataGrid grid={grid} setGrid={setGrid} onImportCSV={handleImportCSV} onAppendCSV={handleAppendCSV} onExemplo={carregarExemplo} />
+              <DataGrid grid={grid} setGrid={setGrid} onImportCSV={handleImportCSV} onAppendCSV={handleAppendCSV} />
             </div>
           )}
 
@@ -311,6 +307,15 @@ export default function Backoffice() {
                   <RotateCcw size={13} /> Desabilitar atípicas
                 </button>
               </div>
+
+              {resultado.avisos && resultado.avisos.length > 0 && (
+                <div className="win-panel p-3 border-l-4 border-l-amber-500">
+                  <div className="text-[12px] font-semibold text-[#8a6d00] mb-1">⚠ Avisos da norma</div>
+                  <ul className="text-[12px] text-[#6b5500] list-disc pl-4 space-y-0.5">
+                    {resultado.avisos.map((a, i) => <li key={i}>{a}</li>)}
+                  </ul>
+                </div>
+              )}
 
               <ResultsPanel resultado={resultado} />
               <TabelaResultados resultado={resultado} grid={grid} />

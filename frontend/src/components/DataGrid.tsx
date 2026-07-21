@@ -1,4 +1,4 @@
-import { Plus, Trash2, Upload, FilePlus2, Eraser, Tag, FlaskConical } from 'lucide-react'
+import { Plus, Trash2, Upload, FilePlus2, Eraser, Tag } from 'lucide-react'
 import type { ChangeEvent } from 'react'
 import { type Coluna, type GridState, type PapelColuna, novoId } from '../grid'
 
@@ -7,7 +7,6 @@ interface Props {
   setGrid: (g: GridState) => void
   onImportCSV: (e: ChangeEvent<HTMLInputElement>) => void
   onAppendCSV: (e: ChangeEvent<HTMLInputElement>) => void
-  onExemplo: () => void
 }
 
 const PAPEL_LABEL: Record<PapelColuna, string> = {
@@ -22,7 +21,7 @@ const PAPEL_COR: Record<PapelColuna, string> = {
   ignorar: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
 }
 
-export default function DataGrid({ grid, setGrid, onImportCSV, onAppendCSV, onExemplo }: Props) {
+export default function DataGrid({ grid, setGrid, onImportCSV, onAppendCSV }: Props) {
   const { colunas, linhas } = grid
 
   // ---- operações ----
@@ -110,7 +109,6 @@ export default function DataGrid({ grid, setGrid, onImportCSV, onAppendCSV, onEx
           <Tag size={16} /> Amostras
           <span className="text-xs font-normal text-slate-400">({nAtivas} ativas de {linhas.length})</span>
         </h2>
-        <button onClick={onExemplo} className="btn-grid" title="Carregar dados de exemplo"><FlaskConical size={14} /> Exemplo</button>
         <button onClick={addLinha} className="btn-grid"><Plus size={14} /> Amostra</button>
         <button onClick={addColuna} className="btn-grid"><Plus size={14} /> Variável</button>
         <label className="btn-grid cursor-pointer" title="Substituir tudo pelo CSV">

@@ -48,6 +48,7 @@ from nbr_grau import (
     avaliar_grau_fundamentacao,
     campo_arbitrio,
     grau_precisao,
+    verificar_micronumerosidade,
 )
 from validador import validar_nbr_14653
 
@@ -287,28 +288,49 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
     grau_prec = None
     campo_inf = None
     campo_sup = None
+    poder_predicao = None
     try:
         import statsmodels.api as sm
         X_pred = sm.add_constant(dados_usados[request.variaveis_independentes], has_constant="add")
         pred = modelo.get_prediction(X_pred).summary_frame(alpha=alpha)
         y_hat_t = pred["mean"].values
-        y_lwr_t = pred["obs_ci_lower"].values
-        y_upr_t = pred["obs_ci_upper"].values
 
         y_hat = transformacao_inversa(y_hat_t, transf_y)
-        y_lwr = transformacao_inversa(y_lwr_t, transf_y)
-        y_upr = transformacao_inversa(y_upr_t, transf_y)
+        # IC de 80% da MÉDIA (grau de precisão usa o IC da estimativa central — NBR 14653-2)
+        y_ic_lwr = transformacao_inversa(pred["mean_ci_lower"].values, transf_y)
+        y_ic_upr = transformacao_inversa(pred["mean_ci_upper"].values, transf_y)
 
         mean_hat = float(np.nanmean(y_hat))
-        mean_lwr = float(np.nanmean(y_lwr))
-        mean_upr = float(np.nanmean(y_upr))
+        mean_lwr = float(np.nanmean(np.minimum(y_ic_lwr, y_ic_upr)))
+        mean_upr = float(np.nanmean(np.maximum(y_ic_lwr, y_ic_upr)))
         amp = round(amplitude_pct(mean_hat, mean_lwr, mean_upr), 4)
         grau_prec = grau_precisao(amp)
-        campo_inf, campo_sup = campo_arbitrio(mean_hat, grau_prec)
+        campo_inf, campo_sup = campo_arbitrio(mean_hat)
         campo_inf = round(campo_inf, 4)
         campo_sup = round(campo_sup, 4)
+
+        # Poder de predição: observado × estimado no espaço original
+        y_obs = dados_usados[request.variavel_dependente].values
+        y_obs_orig = transformacao_inversa(np.asarray(y_obs, dtype=float), transf_y)
+        obs_l = [round(float(v), 4) for v in y_obs_orig]
+        est_l = [round(float(v), 4) for v in y_hat]
+        desvios = [
+            abs(e - o) / o * 100 if o else 0.0 for o, e in zip(obs_l, est_l)
+        ]
+        dentro_20 = sum(1 for d in desvios if d <= 20.0)
+        poder_predicao = {
+            "observado": obs_l,
+            "estimado": est_l,
+            "desvio_medio_pct": round(float(np.mean(desvios)), 2) if desvios else 0.0,
+            "pct_dentro_20": round(dentro_20 / len(desvios) * 100, 1) if desvios else 0.0,
+        }
     except Exception as e:
         logger.warning("Predição/amplitude falhou: %s", e)
+
+    # Micronumerosidade (variáveis com poucos níveis distintos)
+    micro = verificar_micronumerosidade({
+        x: [float(r[x]) for r in dados_limpos] for x in request.variaveis_independentes
+    })
 
     # Grau de fundamentação completo
     pvalores_indep = [
@@ -356,7 +378,9 @@ def bestfit_endpoint(request: BestfitRequest) -> Dict[str, Any]:
         "grau_fundamentacao": grau_fund,
         "ranking": serializar_ranking(ranking),
         "n_modelos_testados": len(ranking),
-        "avisos": avisos_saneamento,
+        "poder_predicao": poder_predicao,
+        "micronumerosidade": micro,
+        "avisos": avisos_saneamento + micro["avisos"],
     }
 
 
@@ -470,9 +494,10 @@ def avaliar_imovel(request: AvaliarImovelRequest) -> Dict[str, Any]:
     pred_inf, pred_sup = sorted([ic_pred_inf, ic_pred_sup])
     conf_inf, conf_sup = sorted([ic_conf_inf, ic_conf_sup])
 
-    amp = amplitude_pct(valor, pred_inf, pred_sup)
+    # Grau de precisão: amplitude do IC da MÉDIA (estimativa central) — NBR 14653-2
+    amp = amplitude_pct(valor, conf_inf, conf_sup)
     grau = grau_precisao(amp)
-    campo_inf, campo_sup = campo_arbitrio(valor, grau)
+    campo_inf, campo_sup = campo_arbitrio(valor)  # ±15% fixo (NBR 14653-1)
 
     logger.info("Imóvel-alvo avaliado: valor=%.2f, grau=%s", valor, grau)
 
