@@ -28,13 +28,22 @@ interface Props {
 }
 
 // Laudos salvos (localStorage) — começa vazio; sem dados fictícios.
-interface LaudoSalvo { id: string; titulo: string; data: string; grau: string; valor: string }
-function carregarLaudos(): LaudoSalvo[] {
+export interface LaudoSalvo { id: string; titulo: string; data: string; grau: string; valor: string; arquivo?: string }
+const LAUDOS_KEY = 'avaliador_laudos_v1'
+
+export function carregarLaudos(): LaudoSalvo[] {
   try {
-    const raw = localStorage.getItem('avaliador_laudos_v1')
+    const raw = localStorage.getItem(LAUDOS_KEY)
     if (raw) return JSON.parse(raw)
   } catch { /* ignora */ }
   return []
+}
+
+/** Salva um laudo no topo da lista de recentes (máx. 30). */
+export function salvarLaudoRecente(l: Omit<LaudoSalvo, 'id'>): void {
+  const atual = carregarLaudos()
+  const novo: LaudoSalvo = { id: `laudo_${Date.now()}`, ...l }
+  localStorage.setItem(LAUDOS_KEY, JSON.stringify([novo, ...atual].slice(0, 30)))
 }
 
 export default function Home({ irPara, novaAvaliacao }: Props) {

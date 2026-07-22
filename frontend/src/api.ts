@@ -170,6 +170,15 @@ export interface AnaliseResponse {
   amostras: AmostraAnalise[]
   recomendar_desabilitar: number[]
   r2_atual: number
+  comparacao?: {
+    grau_atual: string
+    r2_atual: number
+    grau_apos: string
+    r2_apos: number
+    melhora: boolean
+    piora: boolean
+  }
+  recomendacao_texto?: string
 }
 
 export async function analisarAmostras(req: {

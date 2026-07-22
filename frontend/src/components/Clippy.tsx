@@ -7,7 +7,7 @@ interface Msg { autor: 'voce' | 'assistente'; texto: string }
 // Base de conhecimento simples (offline). Casamento por palavras-chave.
 const BASE: { chaves: string[]; resposta: string }[] = [
   { chaves: ['csv', 'importar', 'planilha', 'arquivo'], resposta: 'Para importar dados: no Passo 1, clique em "CSV" (substitui tudo) ou "CSV +" (acrescenta). O arquivo precisa ter cabeçalho na 1ª linha (ex.: valor, area, frente).' },
-  { chaves: ['exemplo', 'teste', 'testar'], resposta: 'Clique no botão "Exemplo" no Passo 1 para carregar 15 amostras prontas e testar o sistema na hora.' },
+  { chaves: ['exemplo', 'teste', 'testar'], resposta: 'Importe seus comparáveis por CSV no Passo 1, ou digite as amostras direto na planilha.' },
   { chaves: ['r2', 'r²', 'r quadrado', 'determinação', 'determinacao'], resposta: 'O R² mede o quanto o modelo explica a variação dos preços (0 a 1). Acima de 0,80 é o recomendado pela NBR 14653-02. Quanto mais perto de 1, melhor.' },
   { chaves: ['transformação', 'transformacao', 'log', 'raiz', 'nenhuma'], resposta: 'Transformações ajustam a relação entre variáveis (ex.: ln(x), 1/x). O Avaliador testa várias combinações automaticamente e escolhe a de melhor ajuste — você não precisa decidir.' },
   { chaves: ['outlier', 'atípic', 'atipic', 'desabilitar', 'desabilita'], resposta: 'No Passo 4, "Desabilitar atípicas" analisa resíduos, distância de Cook e a distância ao imóvel-alvo, e desmarca as amostras fora do padrão. Depois é só calcular de novo.' },
@@ -22,9 +22,23 @@ const BASE: { chaves: string[]; resposta: string }[] = [
 
 const SAUDACOES = [
   'Oi! Sou o assistente do Avaliador. Posso ajudar?',
-  'Precisa de ajuda com a avaliação? É só perguntar!',
-  'Dica: comece carregando dados no Passo 1 (botão Exemplo).',
 ]
+
+// Dicas contextuais por tela/passo.
+const DICAS: Record<string, string> = {
+  inicio: 'Bem-vindo! Preencha seus dados de avaliador aqui em cima — eles vão automaticamente para os laudos. Depois clique em "Nova avaliação".',
+  amostras: 'Neste passo você informa as AMOSTRAS: imóveis parecidos que já têm preço conhecido. Importe um CSV ou digite. No cabeçalho de cada coluna, diga se é o Valor (Y) ou uma Variável (X).',
+  imovel: 'Aqui vamos preencher os dados do IMÓVEL que você vai avaliar — não confunda com as amostras! Coloque o endereço e as características (área, etc.) do imóvel-alvo.',
+  calcular: 'Agora é só calcular. O sistema testa as transformações e escolhe o melhor modelo pela NBR 14653. Não precisa mexer nas configurações avançadas — o padrão já atende a norma.',
+  resultado: 'Aqui está o resultado. Passe o mouse nos ícones (i) para entender cada número. Para adotar outro valor, escolha outro modelo em "Modelos calculados". Antes de fechar, gere o laudo!',
+  banco: 'Este é o banco colaborativo de imóveis. Cadastrando comparáveis com a fonte (link), você e outros avaliadores reaproveitam amostras verificadas — e o sistema sugere imóveis para subir o grau.',
+  aprender: 'Aqui ficam trilhas curtas sobre a norma e a estatística da avaliação. Bom para tirar dúvidas de conceito.',
+}
+
+// Dispara a troca de contexto do assistente (chamado pelas telas).
+export function setContextoAssistente(chave: string) {
+  window.dispatchEvent(new CustomEvent('avaliador-contexto', { detail: chave }))
+}
 
 function responder(pergunta: string): string {
   const p = pergunta.toLowerCase()
@@ -37,13 +51,16 @@ function responder(pergunta: string): string {
   return 'Não tenho certeza sobre isso 🤔. Posso ajudar com: importar CSV, transformações, R², outliers, graus de fundamentação, avaliar o imóvel e gerar o laudo. Tente reformular!'
 }
 
-interface Props { aberto: boolean; setAberto: (v: boolean) => void; dica?: string }
+interface Props { aberto: boolean; setAberto: (v: boolean) => void }
 
-export default function Clippy({ aberto, setAberto, dica }: Props) {
+export default function Clippy({ aberto, setAberto }: Props) {
   const [msgs, setMsgs] = useState<Msg[]>([{ autor: 'assistente', texto: SAUDACOES[0] }])
   const [texto, setTexto] = useState('')
   const fimRef = useRef<HTMLDivElement>(null)
   const [piscar, setPiscar] = useState(false)
+  const [balao, setBalao] = useState<string | null>(null) // fala flutuante quando fechado
+  const contextoRef = useRef<string>('')
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // pisca os olhos periodicamente
   useEffect(() => {
@@ -53,11 +70,46 @@ export default function Clippy({ aberto, setAberto, dica }: Props) {
 
   useEffect(() => { fimRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs, aberto])
 
-  // dica contextual quando muda de passo
+  // Recebe o contexto atual (tela/passo) e prepara a dica; mostra após 1s parado.
   useEffect(() => {
-    if (dica) setMsgs((m) => [...m, { autor: 'assistente', texto: dica }])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dica])
+    const armarIdle = () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+      idleTimer.current = setTimeout(() => {
+        const dica = DICAS[contextoRef.current]
+        if (dica) setBalao(dica) // mostra o balão flutuante (não abre o chat sozinho)
+      }, 1000)
+    }
+    const onContexto = (e: Event) => {
+      const chave = (e as CustomEvent).detail as string
+      contextoRef.current = chave
+      setBalao(null)
+      armarIdle()
+    }
+    const onAtividade = () => { setBalao(null); armarIdle() }
+
+    window.addEventListener('avaliador-contexto', onContexto)
+    window.addEventListener('mousemove', onAtividade)
+    window.addEventListener('keydown', onAtividade)
+    window.addEventListener('click', onAtividade)
+    armarIdle()
+    return () => {
+      window.removeEventListener('avaliador-contexto', onContexto)
+      window.removeEventListener('mousemove', onAtividade)
+      window.removeEventListener('keydown', onAtividade)
+      window.removeEventListener('click', onAtividade)
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+    }
+  }, [])
+
+  // Ao abrir o chat, injeta a dica do contexto atual (se ainda não estiver lá).
+  const abrirComDica = () => {
+    const dica = DICAS[contextoRef.current]
+    if (!aberto && dica) {
+      setMsgs((m) => (m[m.length - 1]?.texto === dica ? m : [...m, { autor: 'assistente', texto: dica }]))
+    }
+    setBalao(null)
+    setAberto(!aberto)
+  }
 
   const enviar = () => {
     const q = texto.trim(); if (!q) return
@@ -103,9 +155,26 @@ export default function Clippy({ aberto, setAberto, dica }: Props) {
         )}
       </AnimatePresence>
 
+      {/* Balão de fala flutuante (quando o chat está fechado) */}
+      <AnimatePresence>
+        {!aberto && balao && (
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            onClick={abrirComDica}
+            className="relative w-[250px] bg-white border-2 border-[#0a4fd6] rounded-xl rounded-br-none shadow-xl p-3 cursor-pointer">
+            <div className="text-[12px] text-slate-700 leading-snug">{balao}</div>
+            <div className="text-[10px] text-blue-600 mt-1">Clique para conversar →</div>
+            <button onClick={(e) => { e.stopPropagation(); setBalao(null) }}
+              className="absolute top-1 right-1 text-slate-300 hover:text-slate-500"><X size={12} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Personagem (clipe animado) */}
       <motion.button
-        onClick={() => setAberto(!aberto)}
+        onClick={abrirComDica}
         title="Assistente"
         animate={{ y: [0, -6, 0], rotate: [0, -3, 3, 0] }}
         transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sidebar, { type SecaoApp } from '../components/ui/sidebar-with-submenu'
-import Clippy from '../components/Clippy'
+import Clippy, { setContextoAssistente } from '../components/Clippy'
 import Backoffice from './Backoffice'
 import Home from './Home'
 import BancoImoveis from './BancoImoveis'
@@ -23,6 +23,12 @@ export default function AppShell() {
     setSecao(s)
     if (s === 'assistente') setClippyAberto(true)
   }
+
+  // Contexto do assistente para as seções que não são o Avaliador
+  // (o Avaliador emite o contexto por passo, de dentro do Backoffice).
+  useEffect(() => {
+    if (secao !== 'avaliador') setContextoAssistente(secao)
+  }, [secao])
 
   return (
     <div className="h-screen flex bg-slate-100 overflow-hidden">

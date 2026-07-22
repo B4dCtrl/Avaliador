@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Info } from 'lucide-react'
 
 export interface Explicacao {
@@ -7,24 +8,42 @@ export interface Explicacao {
   importancia: string
 }
 
-/** Ícone (i) que ao passar o mouse mostra o que é o indicador e seu impacto. */
+/**
+ * Ícone (i) que ao passar o mouse mostra o que é o indicador.
+ * O balão é renderizado via portal no body com posição fixa, então
+ * nunca é cortado por containers com overflow.
+ */
 export default function InfoHint({ titulo, exp }: { titulo: string; exp: Explicacao }) {
-  const [aberto, setAberto] = useState(false)
+  const ref = useRef<HTMLSpanElement>(null)
+  const [pos, setPos] = useState<{ x: number; y: number; acima: boolean } | null>(null)
+
+  const abrir = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    const acima = r.top > 180 // se tem espaço acima, mostra acima; senão abaixo
+    setPos({ x: r.left + r.width / 2, y: acima ? r.top : r.bottom, acima })
+  }
+  const fechar = () => setPos(null)
+
   return (
-    <span className="relative inline-flex align-middle"
-      onMouseEnter={() => setAberto(true)}
-      onMouseLeave={() => setAberto(false)}>
+    <span ref={ref} className="relative inline-flex align-middle"
+      onMouseEnter={abrir} onMouseLeave={fechar}>
       <Info size={12} className="text-slate-400 hover:text-blue-600 cursor-help" />
-      {aberto && (
-        <span className="absolute z-30 left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-64 p-2.5 rounded-lg
-                         bg-slate-900 text-white text-[11px] leading-snug shadow-xl text-left normal-case font-normal">
-          <span className="block font-semibold text-blue-200 mb-1">{titulo}</span>
-          <span className="block mb-1"><b className="text-slate-300">O que é:</b> {exp.oque}</span>
-          <span className="block mb-1"><b className="text-slate-300">Impacto:</b> {exp.impacto}</span>
-          <span className="block"><b className="text-slate-300">Por que importa:</b> {exp.importancia}</span>
-          <span className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0
-                           border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-slate-900" />
-        </span>
+      {pos && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: pos.x,
+            top: pos.acima ? pos.y - 8 : pos.y + 8,
+            transform: `translateX(-50%) translateY(${pos.acima ? '-100%' : '0'})`,
+          }}
+          className="z-[9999] pointer-events-none w-64 p-2.5 rounded-lg bg-slate-900 text-white text-[11px] leading-snug shadow-xl">
+          <div className="font-semibold text-blue-200 mb-1">{titulo}</div>
+          <div className="mb-1"><b className="text-slate-300">O que é:</b> {exp.oque}</div>
+          <div className="mb-1"><b className="text-slate-300">Impacto:</b> {exp.impacto}</div>
+          <div><b className="text-slate-300">Por que importa:</b> {exp.importancia}</div>
+        </div>,
+        document.body,
       )}
     </span>
   )

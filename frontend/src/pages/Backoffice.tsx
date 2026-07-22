@@ -4,13 +4,14 @@ import Papa from 'papaparse'
 import { ChevronLeft, ChevronRight, FilePlus, Save, FolderOpen, Calculator, RotateCcw } from 'lucide-react'
 import {
   calcularBestfit, avaliarImovel, analisarAmostras, exportarWord, exportarPDF, bestfitParaExport, baixarArquivo,
-  type BestfitResponse, type AvaliarImovelResponse, type ExportConfig,
+  type BestfitResponse, type AvaliarImovelResponse, type ExportConfig, type AnaliseResponse,
 } from '../api'
 import {
   type GridState, gridVazio, gridDeCSV, acrescentarCSV, montarPayloadBestfit, montarImovelAlvo,
   reconsiderarTodas, desabilitarIndices,
 } from '../grid'
-import { carregarPerfil } from './Home'
+import { carregarPerfil, salvarLaudoRecente } from './Home'
+import { setContextoAssistente } from '../components/Clippy'
 import InfoHint, { EXPLICACOES, type Explicacao } from '../components/InfoHint'
 import DataGrid from '../components/DataGrid'
 import PainelAvaliando from '../components/PainelAvaliando'
@@ -30,7 +31,7 @@ const brl = (n: number | null | undefined) =>
     ? '—'
     : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 
-const PASSOS = ['Dados', 'Imóvel', 'Calcular', 'Resultado']
+const PASSOS = ['Amostras', 'Imóvel', 'Calcular', 'Resultado']
 
 interface Persistido { nomeProjeto: string; grid: GridState; transfTestar: string[]; nivelConfianca: number }
 
@@ -40,16 +41,17 @@ export default function Backoffice() {
   const [grid, setGrid] = useState<GridState>(() => gridVazio())
   const [transfTestar, setTransfTestar] = useState<string[]>(['nenhuma', 'log', 'raiz_quadrada', 'raiz_reciproca'])
   const [nivelConfianca, setNivelConfianca] = useState(0.80)
-  const [avancado, setAvancado] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [resultado, setResultado] = useState<BestfitResponse | null>(null)
   const [avaliacao, setAvaliacao] = useState<AvaliarImovelResponse | null>(null)
   // Arbítrio do avaliador: valor final escolhido dentro do campo de arbítrio (±15%)
   const [valorArbitrado, setValorArbitrado] = useState<number | null>(null)
+  const [analise, setAnalise] = useState<{ resp: AnaliseResponse; reais: number[] } | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [salvoEm, setSalvoEm] = useState<string | null>(null)
+  const [autosaveOn, setAutosaveOn] = useState(true)
   const [exportConfig, setExportConfig] = useState<ExportConfig>(() => {
     const perfil = carregarPerfil()
     return {
@@ -71,10 +73,16 @@ export default function Backoffice() {
   }, [])
 
   useEffect(() => {
+    if (!autosaveOn) return
     const p: Persistido = { nomeProjeto, grid, transfTestar, nivelConfianca }
     const t = setTimeout(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); setSalvoEm(new Date().toLocaleTimeString('pt-BR')) }, 600)
     return () => clearTimeout(t)
-  }, [nomeProjeto, grid, transfTestar, nivelConfianca])
+  }, [autosaveOn, nomeProjeto, grid, transfTestar, nivelConfianca])
+
+  // Contexto do assistente conforme o passo atual
+  useEffect(() => {
+    setContextoAssistente(['amostras', 'imovel', 'calcular', 'resultado'][passo - 1])
+  }, [passo])
 
   const flash = (m: string) => { setMsg(m); setErro(null); setTimeout(() => setMsg(null), 2500) }
 
@@ -140,9 +148,10 @@ export default function Backoffice() {
     finally { setLoading(false) }
   }, [grid, transfTestar, nivelConfianca])
 
-  const handleDesabilitar = useCallback(async () => {
+  // Passo 1: analisa e MOSTRA a recomendação (não altera nada ainda)
+  const handleAnalisar = useCallback(async () => {
     if (!resultado) return
-    setLoading(true); setErro(null)
+    setLoading(true); setErro(null); setAnalise(null)
     try {
       const dep = grid.colunas.find((c) => c.papel === 'dependente')!
       const indeps = grid.colunas.filter((c) => c.papel === 'independente')
@@ -154,12 +163,17 @@ export default function Backoffice() {
       })
       const ativos = grid.linhas.map((l, i) => ({ l, i })).filter((x) => !x.l.excluida)
       const reais = an.recomendar_desabilitar.map((idx) => ativos[idx]?.i).filter((x): x is number => x != null)
-      if (!reais.length) { flash('Nenhuma amostra atípica detectada ✓'); return }
-      setGrid(desabilitarIndices(grid, reais)); setPasso(1)
-      flash(`${reais.length} amostra(s) atípica(s) desabilitada(s). Calcule novamente.`)
+      setAnalise({ resp: an, reais })
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro na análise') }
     finally { setLoading(false) }
   }, [resultado, grid, transfTestar, nivelConfianca])
+
+  // Passo 2: aplica de fato (só quando o avaliador confirma)
+  const aplicarDesabilitar = useCallback(() => {
+    if (!analise || !analise.reais.length) return
+    setGrid(desabilitarIndices(grid, analise.reais)); setAnalise(null); setPasso(1)
+    flash(`${analise.reais.length} amostra(s) desabilitada(s). Calcule novamente para atualizar.`)
+  }, [analise, grid])
 
   const handleExport = useCallback(async (tipo: 'word' | 'pdf') => {
     if (!resultado) return
@@ -173,9 +187,17 @@ export default function Backoffice() {
       const dep = grid.colunas.find((c) => c.papel === 'dependente')!
       const payload = bestfitParaExport(resultado, dep.nome, avaliacao, valorArbitrado)
       const r = await (tipo === 'word' ? exportarWord : exportarPDF)(payload, exportConfig)
-      await baixarArquivo(r.url_download, r.arquivo); flash(`Laudo ${tipo.toUpperCase()} baixado`)
+      await baixarArquivo(r.url_download, r.arquivo)
+      salvarLaudoRecente({
+        titulo: exportConfig.endereco?.trim() || nomeProjeto || 'Avaliação',
+        data: new Date().toLocaleString('pt-BR'),
+        grau: resultado.grau_fundamentacao.grau,
+        valor: brl(valorArbitrado ?? avaliacao?.valor_estimado ?? null),
+        arquivo: r.arquivo,
+      })
+      flash(`Laudo ${tipo.toUpperCase()} baixado e salvo na Início`)
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao exportar') }
-  }, [resultado, grid, exportConfig, avaliacao, valorArbitrado])
+  }, [resultado, grid, exportConfig, avaliacao, valorArbitrado, nomeProjeto])
 
   const novo = () => { setGrid(gridVazio()); setResultado(null); setAvaliacao(null); setNomeProjeto('Nova avaliação'); setPasso(1); flash('Novo projeto') }
   const salvar = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify({ nomeProjeto, grid, transfTestar, nivelConfianca })); flash('Projeto salvo') }
@@ -218,8 +240,15 @@ export default function Backoffice() {
           <button onClick={novo} className="win-btn flex items-center gap-1"><FilePlus size={13} /> Novo</button>
           <button onClick={() => fileJSON.current?.click()} className="win-btn flex items-center gap-1"><FolderOpen size={13} /> Abrir</button>
           <button onClick={salvar} className="win-btn flex items-center gap-1"><Save size={13} /> Salvar</button>
-          <input value={nomeProjeto} onChange={(e) => setNomeProjeto(e.target.value)} className="win-field flex-1 max-w-[240px] ml-2" placeholder="Nome do projeto" />
-          <span className="ml-auto text-[#666] text-[11px]">{salvoEm ? `salvo ${salvoEm}` : ''}</span>
+          <label className="flex items-center gap-1 text-[11px] text-[#444] cursor-pointer select-none" title="Salvar automaticamente as alterações">
+            <button type="button" role="switch" aria-checked={autosaveOn} onClick={() => setAutosaveOn(!autosaveOn)}
+              className={`relative w-8 h-[18px] rounded-full transition-colors ${autosaveOn ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <span className={`absolute top-[2px] w-[14px] h-[14px] bg-white rounded-full shadow transition-all ${autosaveOn ? 'left-[16px]' : 'left-[2px]'}`} />
+            </button>
+            auto-salvar
+          </label>
+          <input value={nomeProjeto} onChange={(e) => setNomeProjeto(e.target.value)} className="win-field flex-1 max-w-[220px] ml-2" placeholder="Nome do projeto" />
+          <span className="ml-auto text-[#666] text-[11px]">{autosaveOn ? (salvoEm ? `salvo ${salvoEm}` : '') : 'auto-salvar off'}</span>
         </div>
 
         {/* Indicador de passos */}
@@ -258,27 +287,75 @@ export default function Backoffice() {
           )}
 
           {passo === 2 && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <h2 className="text-[14px] font-bold text-[#0a3fb0]">Passo 2 — Imóvel a avaliar</h2>
-              <p className="text-[12px] text-[#555]">Informe as características do imóvel que você quer avaliar.</p>
-              <PainelAvaliando grid={grid} setGrid={setGrid} />
+              <p className="text-[12px] text-[#555]">
+                Preencha os dados do imóvel <b>que você vai avaliar</b> (o imóvel-alvo). Não confunda com as amostras
+                comparáveis do Passo 1 — aqui é o imóvel cujo valor será estimado.
+              </p>
+
+              {/* Identificação do imóvel (vai para o laudo) */}
+              <div className="win-panel p-3">
+                <div className="text-[12px] font-semibold text-[#0a3fb0] mb-2">Identificação do imóvel</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] text-[#555] block mb-0.5">Endereço</label>
+                    <input className="win-field w-full" placeholder="Rua, número, bairro, cidade/UF"
+                      value={exportConfig.endereco} onChange={(e) => setExportConfig({ ...exportConfig, endereco: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#555] block mb-0.5">Área do terreno (m²)</label>
+                    <input type="number" className="win-field w-full" placeholder="Ex.: 360"
+                      value={exportConfig.area_terreno ?? ''} onChange={(e) => setExportConfig({ ...exportConfig, area_terreno: e.target.value === '' ? undefined : Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#555] block mb-0.5">Área construída (m²)</label>
+                    <input type="number" className="win-field w-full" placeholder="Ex.: 220"
+                      value={exportConfig.area_construida ?? ''} onChange={(e) => setExportConfig({ ...exportConfig, area_construida: e.target.value === '' ? undefined : Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#555] block mb-0.5">Finalidade da avaliação</label>
+                    <input className="win-field w-full" placeholder="Ex.: garantia, compra e venda, judicial"
+                      value={exportConfig.finalidade ?? ''} onChange={(e) => setExportConfig({ ...exportConfig, finalidade: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-[#555] block mb-0.5">Data da avaliação</label>
+                    <input type="date" className="win-field w-full"
+                      value={exportConfig.data_avaliacao} onChange={(e) => setExportConfig({ ...exportConfig, data_avaliacao: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Características que entram no modelo (variáveis X) */}
+              <div>
+                <div className="text-[12px] font-semibold text-[#0a3fb0] mb-1">Características para o cálculo</div>
+                <p className="text-[11px] text-[#555] mb-1">Estes valores (as variáveis do modelo) são o que o motor usa para estimar o preço.</p>
+                <PainelAvaliando grid={grid} setGrid={setGrid} />
+              </div>
             </div>
           )}
 
           {passo === 3 && (
             <div className="space-y-3">
-              <h2 className="text-[14px] font-bold text-[#0a3fb0]">Passo 3 — Calcular</h2>
+              <h2 className="text-[14px] font-bold text-[#0a3fb0]">Passo 3 — Calcular a avaliação</h2>
               <div className="win-panel p-3 text-[12px] text-[#444]">
-                Vou ajustar a regressão com <b>{nAtivas}</b> amostras e <b>{nIndeps}</b> variável(is),
-                testando automaticamente as transformações e escolhendo o melhor modelo (NBR 14653-02).
+                O sistema vai ajustar a regressão linear com <b>{nAtivas}</b> amostra(s) e <b>{nIndeps}</b> variável(is).
+                Ele testa automaticamente as transformações e escolhe o modelo de melhor ajuste, conforme a NBR 14653.
+                Você poderá revisar e trocar o modelo depois, no resultado.
               </div>
 
-              <button onClick={() => setAvancado(!avancado)} className="text-[12px] text-[#0a4fd6] underline">
-                {avancado ? '▼ Ocultar opções avançadas' : '▸ Opções avançadas'}
-              </button>
-              {avancado && (
-                <div className="win-panel p-3 space-y-2">
-                  <div className="text-[11px] text-[#555]">Transformações a testar:</div>
+              <div className="win-panel p-3 space-y-3">
+                <div className="text-[12px] font-semibold text-[#0a3fb0]">Configurações do cálculo</div>
+
+                <div>
+                  <div className="text-[11px] text-[#555] mb-1 flex items-center gap-1">
+                    Transformações que o sistema vai testar
+                    <InfoHint titulo="Transformações" exp={{
+                      oque: 'Funções aplicadas às variáveis (ex.: ln(x), 1/x) para captar relações não-lineares com o preço.',
+                      impacto: 'O sistema testa todas as combinações marcadas e escolhe a de melhor ajuste.',
+                      importancia: 'Deixe as 4 padrão marcadas. Marcar mais aumenta as chances de um modelo melhor, mas demora um pouco mais.',
+                    }} />
+                  </div>
                   <div className="flex flex-wrap gap-1">
                     {TRANSFORMACOES.map((t) => (
                       <button key={t.value} onClick={() => toggleTransf(t.value)}
@@ -287,14 +364,24 @@ export default function Backoffice() {
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[12px]">Nível de confiança:</label>
-                    <select value={nivelConfianca} onChange={(e) => setNivelConfianca(parseFloat(e.target.value))} className="win-field">
-                      <option value={0.80}>80% (padrão NBR)</option><option value={0.90}>90%</option><option value={0.95}>95%</option>
-                    </select>
-                  </div>
                 </div>
-              )}
+
+                <div>
+                  <div className="text-[11px] text-[#555] mb-1 flex items-center gap-1">
+                    Nível de confiança
+                    <InfoHint titulo="Nível de confiança" exp={{
+                      oque: 'Probabilidade de o valor real estar dentro do intervalo estimado. A NBR 14653 usa 80%.',
+                      impacto: 'Aumentar (90%/95%) alarga o intervalo e pode baixar o grau de precisão.',
+                      importancia: 'Deixe em 80% (padrão da norma). Praticamente ninguém precisa mudar — só há motivo em estudos específicos.',
+                    }} />
+                  </div>
+                  <select value={nivelConfianca} onChange={(e) => setNivelConfianca(parseFloat(e.target.value))} className="win-field">
+                    <option value={0.80}>80% — padrão NBR (recomendado)</option>
+                    <option value={0.90}>90%</option>
+                    <option value={0.95}>95%</option>
+                  </select>
+                </div>
+              </div>
 
               <button onClick={() => handleCalcular()} disabled={loading} className="win-btn win-btn-primary flex items-center gap-2 text-[13px] px-5 py-2">
                 <Calculator size={16} /> {loading ? 'Calculando…' : 'Calcular regressão'}
@@ -337,10 +424,50 @@ export default function Backoffice() {
                 <span>R²: <b>{m.r2.toFixed(4)}</b></span>
                 <span>R² aj.: <b>{m.r2_ajustado.toFixed(4)}</b></span>
                 <span>Fundamentação: <b>{resultado.grau_fundamentacao.grau}</b></span>
-                <button onClick={handleDesabilitar} disabled={loading} className="win-btn ml-auto flex items-center gap-1">
-                  <RotateCcw size={13} /> Desabilitar atípicas
+                <button onClick={handleAnalisar} disabled={loading} className="win-btn ml-auto flex items-center gap-1"
+                  title="Analisa se há amostras fora do padrão e mostra se removê-las melhora ou piora a avaliação">
+                  <RotateCcw size={13} /> Analisar amostras atípicas
                 </button>
               </div>
+
+              {/* Recomendação da análise de outliers — o avaliador decide */}
+              {analise && (
+                <div className={`win-panel p-3 border-l-4 ${
+                  analise.resp.comparacao?.piora ? 'border-l-red-500' :
+                  analise.resp.comparacao?.melhora ? 'border-l-emerald-500' : 'border-l-amber-500'}`}>
+                  <div className="text-[12px] font-semibold text-[#0a3fb0] mb-1 flex items-center justify-between">
+                    <span>Análise de amostras atípicas</span>
+                    <button onClick={() => setAnalise(null)} className="text-[11px] text-slate-400 hover:text-slate-600">fechar ✕</button>
+                  </div>
+                  <p className="text-[12px] text-[#444] mb-2">{analise.resp.recomendacao_texto}</p>
+                  {analise.resp.comparacao && analise.reais.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 text-[12px] mb-2">
+                      <div className="bg-white border border-slate-200 rounded px-2 py-1">
+                        <div className="text-[10px] text-slate-500">Agora</div>
+                        <div>Grau <b>{analise.resp.comparacao.grau_atual}</b> · R² {analise.resp.comparacao.r2_atual.toFixed(3)}</div>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded px-2 py-1">
+                        <div className="text-[10px] text-slate-500">Se remover {analise.reais.length}</div>
+                        <div>Grau <b>{analise.resp.comparacao.grau_apos}</b> · R² {analise.resp.comparacao.r2_apos.toFixed(3)}</div>
+                      </div>
+                    </div>
+                  )}
+                  {analise.reais.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button onClick={aplicarDesabilitar}
+                        className={`win-btn ${analise.resp.comparacao?.piora ? '' : 'win-btn-primary'}`}>
+                        {analise.resp.comparacao?.piora ? 'Desabilitar mesmo assim' : `Desabilitar ${analise.reais.length} e recalcular`}
+                      </button>
+                      <button onClick={() => setAnalise(null)} className="win-btn">Manter todas</button>
+                      {analise.resp.comparacao?.piora && (
+                        <span className="text-[11px] text-red-600">O sistema recomenda MANTER — remover pioraria o laudo.</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-[12px] text-emerald-700">✓ Nenhuma ação necessária.</div>
+                  )}
+                </div>
+              )}
 
               {resultado.avisos && resultado.avisos.length > 0 && (
                 <div className="win-panel p-3 border-l-4 border-l-amber-500">

@@ -118,6 +118,68 @@ def analisar_amostras(
 
     logger.info("Análise de amostras: %d atípicas de %d", len(recomendados), n)
 
+    # --- Simulação: como fica o modelo SE remover as amostras recomendadas ---
+    from nbr_grau import avaliar_grau_fundamentacao
+
+    def _grau(mod, n_obs):
+        pvals = [float(mod.pvalues[i]) for i in range(1, len(mod.params))]
+        return avaliar_grau_fundamentacao(
+            amp=None, p_valores_coefs=pvals, p_valor_f=float(mod.f_pvalue),
+            n=int(n_obs), k=len(variaveis_independentes),
+        )["grau"]
+
+    grau_atual = _grau(modelo, n)
+    r2_atual = float(modelo.rsquared)
+
+    comparacao = {
+        "grau_atual": grau_atual,
+        "r2_atual": round(r2_atual, 6),
+        "grau_apos": grau_atual,
+        "r2_apos": round(r2_atual, 6),
+        "melhora": False,
+        "piora": False,
+    }
+    recomendacao_texto = "Nenhuma amostra atípica detectada — o conjunto está consistente."
+
+    if recomendados:
+        manter = [i for i in range(n) if i not in set(recomendados)]
+        if len(manter) >= len(variaveis_independentes) + 2:
+            X_apos = X[manter]
+            y_apos = y_t[manter]
+            modelo_apos = sm.OLS(y_apos, sm.add_constant(X_apos, has_constant="add")).fit()
+            grau_apos = _grau(modelo_apos, len(manter))
+            r2_apos = float(modelo_apos.rsquared)
+            ordem = {"Fora dos critérios": 0, "I": 1, "II": 2, "III": 3}
+            melhora = ordem.get(grau_apos, 0) > ordem.get(grau_atual, 0) or r2_apos > r2_atual + 0.01
+            piora = ordem.get(grau_apos, 0) < ordem.get(grau_atual, 0)
+            comparacao.update({
+                "grau_apos": grau_apos,
+                "r2_apos": round(r2_apos, 6),
+                "melhora": bool(melhora),
+                "piora": bool(piora),
+            })
+            if piora:
+                recomendacao_texto = (
+                    f"⚠ Remover estas {len(recomendados)} amostra(s) PIORA a avaliação "
+                    f"(grau {grau_atual} → {grau_apos}). O modelo atual já está melhor — "
+                    "recomendo NÃO desabilitar."
+                )
+            elif melhora:
+                recomendacao_texto = (
+                    f"Remover estas {len(recomendados)} amostra(s) melhora a avaliação "
+                    f"(grau {grau_atual} → {grau_apos}, R² {r2_atual:.3f} → {r2_apos:.3f})."
+                )
+            else:
+                recomendacao_texto = (
+                    f"{len(recomendados)} amostra(s) atípica(s) detectada(s), mas remover não muda "
+                    f"o grau ({grau_atual}). Avalie caso a caso — a decisão é do avaliador."
+                )
+        else:
+            recomendacao_texto = (
+                "Foram detectadas amostras atípicas, mas removê-las deixaria dados de menos "
+                "para a regressão. Cadastre mais amostras antes de desabilitar."
+            )
+
     return {
         "status": "sucesso",
         "n_amostras": n,
@@ -128,5 +190,7 @@ def analisar_amostras(
         },
         "amostras": amostras,
         "recomendar_desabilitar": recomendados,
-        "r2_atual": round(float(modelo.rsquared), 6),
+        "r2_atual": round(r2_atual, 6),
+        "comparacao": comparacao,
+        "recomendacao_texto": recomendacao_texto,
     }
