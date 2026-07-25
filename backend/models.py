@@ -203,6 +203,15 @@ class AnuncioCandidato(BaseModel):
     indicadores: Optional[Dict[str, Any]] = None
 
 
+class BuscarFontesRequest(BaseModel):
+    """Busca automática de imóveis em fontes públicas."""
+    uf: str
+    cidade: str
+    bairro: str = ""
+    fontes: Optional[List[str]] = None
+    limite: int = Field(default=200, ge=1, le=1000)
+
+
 class ComparablesRequest(BaseModel):
     """POST /api/comparables — pipeline completo de busca de amostras."""
     imovel: ImovelAlvoBusca

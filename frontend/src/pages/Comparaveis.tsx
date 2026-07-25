@@ -4,7 +4,7 @@ import {
   Send, Users, TrendingUp, GraduationCap, Gauge, CheckCircle2, AlertTriangle, Layers,
 } from 'lucide-react'
 import {
-  buscarLocalizacao, buscarComparables,
+  buscarLocalizacao, buscarComparables, buscarEmFontes,
   type PerfilLocalizacao, type AnuncioCandidato, type ComparablesResponse,
 } from '../api'
 
@@ -63,6 +63,39 @@ export default function Comparaveis({ onEnviarParaAmostras }: Props) {
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro ao buscar localização')
     } finally { setBuscandoLoc(false) }
+  }
+
+  const [buscandoFontes, setBuscandoFontes] = useState(false)
+  const [infoFontes, setInfoFontes] = useState<string | null>(null)
+
+  /** Busca automática em fontes públicas (dados abertos — sem scraping). */
+  const buscarAutomatico = async () => {
+    if (!loc?.localizacao.uf || !loc?.localizacao.cidade) {
+      setErro('Busque o CEP primeiro para identificar a cidade.')
+      return
+    }
+    setErro(null); setBuscandoFontes(true); setInfoFontes(null)
+    try {
+      const r = await buscarEmFontes({
+        uf: loc.localizacao.uf,
+        cidade: loc.localizacao.cidade,
+        bairro: imovel.bairro || '',
+        limite: 200,
+      })
+      if (!r.total) {
+        // tenta de novo sem o filtro de bairro
+        const r2 = await buscarEmFontes({ uf: loc.localizacao.uf, cidade: loc.localizacao.cidade, limite: 200 })
+        if (!r2.total) { setInfoFontes('Nenhum imóvel encontrado nas fontes públicas para esta cidade.'); return }
+        setCandidatos([...(candidatos.filter((c) => Object.keys(c).length > 0)), ...(r2.candidatos as AnuncioCandidato[])])
+        setInfoFontes(`${r2.total} imóveis encontrados na cidade (sem filtro de bairro).`)
+      } else {
+        setCandidatos([...(candidatos.filter((c) => Object.keys(c).length > 0)), ...(r.candidatos as AnuncioCandidato[])])
+        setInfoFontes(`${r.total} imóveis encontrados: ${Object.entries(r.por_fonte).map(([k, v]) => `${k} (${v})`).join(', ')}.`)
+      }
+      if (r.erros?.length) setErro(`Algumas fontes falharam: ${r.erros.map((e) => e.fonte).join(', ')}`)
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao buscar nas fontes')
+    } finally { setBuscandoFontes(false) }
   }
 
   const processarColagem = () => {
@@ -225,6 +258,12 @@ export default function Comparaveis({ onEnviarParaAmostras }: Props) {
       {/* 03 — Candidatos */}
       <Secao n="03" titulo="Imóveis candidatos" icone={<Layers size={16} />}>
         <div className="flex flex-wrap items-center gap-2 mb-3">
+          <button onClick={buscarAutomatico} disabled={buscandoFontes || !loc}
+            title={loc ? 'Buscar em bases públicas (Caixa)' : 'Busque o CEP primeiro'}
+            className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white flex items-center gap-1.5 font-medium">
+            {buscandoFontes ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+            {buscandoFontes ? 'Buscando…' : 'Buscar automaticamente'}
+          </button>
           <button onClick={() => setCandidatos([...candidatos, {}])} className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 hover:bg-slate-50 flex items-center gap-1">
             <Plus size={13} /> Candidato
           </button>
@@ -233,6 +272,12 @@ export default function Comparaveis({ onEnviarParaAmostras }: Props) {
           </button>
           <span className="ml-auto text-[11px] text-slate-500">Meta: 15 a 30 amostras qualificadas</span>
         </div>
+
+        {infoFontes && (
+          <div className="mb-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
+            ✓ {infoFontes} <span className="text-emerald-600">Fonte: dados públicos oficiais (valor de avaliação, com link de verificação).</span>
+          </div>
+        )}
 
         {colarAberto && (
           <div className="mb-3 p-3 rounded-lg bg-blue-50 border border-blue-200">

@@ -224,6 +224,25 @@ export async function buscarLocalizacao(req: { cep: string; numero?: string; bai
   return resp.json()
 }
 
+// ---- Fontes públicas (busca automática, sem scraping) ----
+export interface FonteDados { id: string; nome: string; descricao: string; legal: string }
+
+export async function listarFontes(): Promise<{ fontes: FonteDados[] }> {
+  const resp = await fetch(`${BASE}/api/fontes`)
+  if (!resp.ok) throw new Error(`Erro ${resp.status}`)
+  return resp.json()
+}
+
+export async function buscarEmFontes(req: {
+  uf: string; cidade: string; bairro?: string; fontes?: string[]; limite?: number
+}): Promise<{ status: string; total: number; candidatos: Record<string, unknown>[]; por_fonte: Record<string, number>; erros: { fonte: string; erro: string }[] }> {
+  const resp = await fetch(`${BASE}/api/fontes/buscar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req),
+  })
+  if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`)
+  return resp.json()
+}
+
 // ---- Comparable Property Search Engine ----
 export interface AnuncioCandidato {
   identificacao?: string | null; endereco?: string | null; tipo?: string | null

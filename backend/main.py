@@ -39,11 +39,13 @@ from viabilidade import analisar_viabilidade
 from comparaveis import ranquear_comparaveis, similaridade_territorial
 from location_intelligence import perfil_localizacao, buscar_cep
 from comparable_search import buscar_comparaveis
+from fontes_dados import buscar_em_fontes, listar_fontes
 from models import (
     AnalisarAmostrasRequest,
     AvaliarImovelRequest,
     BestfitRequest,
     DadosRegressaoRequest,
+    BuscarFontesRequest,
     ComparablesRequest,
     ComparaveisRequest,
     ExportarRequest,
@@ -479,6 +481,34 @@ def localizacao_endpoint(request: LocalizacaoRequest) -> Dict[str, Any]:
     if not r.get("ok"):
         raise HTTPException(status_code=422, detail=r.get("erro", "Não foi possível montar o perfil."))
     return r
+
+
+@app.get("/api/fontes", tags=["inteligencia"])
+def fontes_endpoint() -> Dict[str, Any]:
+    """Lista as fontes públicas disponíveis para busca automática."""
+    return {"fontes": listar_fontes()}
+
+
+@app.post("/api/fontes/buscar", tags=["inteligencia"])
+def buscar_fontes_endpoint(request: BuscarFontesRequest) -> Dict[str, Any]:
+    """
+    Busca automática de imóveis em fontes públicas (dados abertos).
+
+    Não faz scraping: consome arquivos que a própria fonte publica.
+    """
+    if not request.uf or not request.cidade:
+        raise HTTPException(status_code=422, detail="Informe UF e cidade.")
+    try:
+        r = buscar_em_fontes(
+            uf=request.uf, cidade=request.cidade, bairro=request.bairro,
+            fontes=request.fontes, limite=request.limite,
+        )
+        r["status"] = "sucesso"
+        r["total"] = len(r["candidatos"])
+        return r
+    except Exception as e:
+        logger.error("Erro na busca em fontes: %s", e)
+        raise HTTPException(status_code=502, detail=f"Falha ao consultar as fontes: {e}")
 
 
 @app.post("/api/comparables", tags=["inteligencia"])
