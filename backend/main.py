@@ -37,13 +37,17 @@ from analise import analisar_amostras
 from saneamento import DadosInvalidos, sanear_dataset
 from viabilidade import analisar_viabilidade
 from comparaveis import ranquear_comparaveis, similaridade_territorial
+from location_intelligence import perfil_localizacao, buscar_cep
+from comparable_search import buscar_comparaveis
 from models import (
     AnalisarAmostrasRequest,
     AvaliarImovelRequest,
     BestfitRequest,
     DadosRegressaoRequest,
+    ComparablesRequest,
     ComparaveisRequest,
     ExportarRequest,
+    LocalizacaoRequest,
     RegressaoResponse,
     ViabilidadeRequest,
 )
@@ -445,6 +449,58 @@ def analisar_amostras_endpoint(request: AnalisarAmostrasRequest) -> Dict[str, An
         )
     except (ValueError, KeyError) as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Módulo de inteligência imobiliária (independente do motor de avaliação)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/cep/{cep}", tags=["inteligencia"])
+def cep_endpoint(cep: str) -> Dict[str, Any]:
+    """Consulta ViaCEP: preenche logradouro, cidade, UF e código IBGE."""
+    r = buscar_cep(cep)
+    if not r.get("ok"):
+        raise HTTPException(status_code=404, detail=r.get("erro", "CEP não encontrado."))
+    return r
+
+
+@app.post("/api/localizacao", tags=["inteligencia"])
+def localizacao_endpoint(request: LocalizacaoRequest) -> Dict[str, Any]:
+    """
+    Location Intelligence Engine: a partir do CEP, monta o perfil completo
+    da localização (endereço, IBGE, lat/long, indicadores e infraestrutura).
+    """
+    r = perfil_localizacao(
+        cep=request.cep,
+        numero=request.numero,
+        bairro=request.bairro,
+        com_infraestrutura=request.com_infraestrutura,
+    )
+    if not r.get("ok"):
+        raise HTTPException(status_code=422, detail=r.get("erro", "Não foi possível montar o perfil."))
+    return r
+
+
+@app.post("/api/comparables", tags=["inteligencia"])
+def comparables_endpoint(request: ComparablesRequest) -> Dict[str, Any]:
+    """
+    Comparable Property Search Engine: filtra, expande em níveis e devolve
+    a base de amostras qualificadas + confiabilidade da busca.
+
+    Não estima valor — entrega as amostras para o motor de avaliação.
+    """
+    try:
+        return buscar_comparaveis(
+            alvo=request.imovel.model_dump(),
+            candidatos=[c.model_dump() for c in request.candidatos],
+            indicadores_alvo=request.indicadores_regiao,
+            meta_minima=request.meta_minima,
+            meta_maxima=request.meta_maxima,
+            score_territorial_minimo=request.score_territorial_minimo,
+        )
+    except Exception as e:
+        logger.error("Erro na busca de comparáveis: %s", e)
+        raise HTTPException(status_code=422, detail=f"Erro na busca de comparáveis: {e}")
 
 
 # ---------------------------------------------------------------------------

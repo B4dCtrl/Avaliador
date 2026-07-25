@@ -52,10 +52,15 @@ export default function AppShell() {
 
           {secao === 'comparaveis' && (
             <Comparaveis onEnviarParaAmostras={(linhas) => {
-              // Ponte: grava os comparáveis e leva o usuário para o Avaliador
-              localStorage.setItem('avaliador_comps_pendentes', JSON.stringify(linhas))
+              // Ponte: grava as amostras e leva o usuário para o Avaliador
+              const registros = linhas.map((l) => ({
+                valor: l.valor,
+                area_construida: l.area,
+                area_terreno: l.area_terreno,
+              }))
+              localStorage.setItem('avaliador_comps_pendentes', JSON.stringify(registros))
               setSecao('avaliador')
-              window.dispatchEvent(new CustomEvent('avaliador-importar-comps'))
+              setTimeout(() => window.dispatchEvent(new CustomEvent('avaliador-importar-comps')), 50)
             }} />
           )}
 

@@ -155,6 +155,64 @@ class ComparaveisRequest(BaseModel):
     minimo_similaridade: float = Field(default=0.0, ge=0.0, le=100.0)
 
 
+# ---------------------------------------------------------------------------
+# Módulo de inteligência imobiliária (Location Intelligence + Comparable Search)
+# ---------------------------------------------------------------------------
+
+class LocalizacaoRequest(BaseModel):
+    """Entrada mínima: CEP + número. O resto é buscado automaticamente."""
+    cep: str
+    numero: str = ""
+    bairro: Optional[str] = None
+    com_infraestrutura: bool = True
+
+
+class ImovelAlvoBusca(BaseModel):
+    """Dados básicos informados pelo usuário sobre o imóvel."""
+    tipo: Optional[str] = None                 # casa, apartamento, terreno, comercial
+    area_construida: Optional[float] = None
+    area_terreno: Optional[float] = None
+    quartos: Optional[float] = None
+    banheiros: Optional[float] = None
+    vagas: Optional[float] = None
+    padrao_construtivo: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    preco_m2_referencia: Optional[float] = None
+
+
+class AnuncioCandidato(BaseModel):
+    """Anúncio disponível para virar amostra."""
+    identificacao: Optional[str] = None
+    endereco: Optional[str] = None
+    tipo: Optional[str] = None
+    preco: Optional[float] = None
+    area_construida: Optional[float] = None
+    area: Optional[float] = None
+    area_terreno: Optional[float] = None
+    quartos: Optional[float] = None
+    banheiros: Optional[float] = None
+    vagas: Optional[float] = None
+    padrao_construtivo: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    distancia_km: Optional[float] = None
+    idade_anuncio_dias: Optional[float] = None
+    fonte: Optional[str] = None
+    indicadores: Optional[Dict[str, Any]] = None
+
+
+class ComparablesRequest(BaseModel):
+    """POST /api/comparables — pipeline completo de busca de amostras."""
+    imovel: ImovelAlvoBusca
+    candidatos: List[AnuncioCandidato] = []
+    indicadores_regiao: Optional[Dict[str, Any]] = None
+    meta_minima: int = Field(default=15, ge=3, le=100)
+    meta_maxima: int = Field(default=30, ge=3, le=200)
+    score_territorial_minimo: float = Field(default=85.0, ge=0.0, le=100.0)
+
+
 class ViabilidadeRequest(BaseModel):
     """Análise de viabilidade de investimento imobiliário."""
     valor_mercado: float = Field(..., gt=0)

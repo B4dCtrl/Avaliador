@@ -197,6 +197,84 @@ export async function analisarAmostras(req: {
   return resp.json()
 }
 
+// ---- Location Intelligence Engine ----
+export interface PerfilLocalizacao {
+  ok: boolean
+  localizacao: {
+    cep?: string | null; logradouro?: string | null; numero?: string | null
+    bairro?: string | null; cidade?: string | null; uf?: string | null
+    ibge?: string | null; latitude?: number | null; longitude?: number | null
+  }
+  indicadores: {
+    idh?: number | null; idhm_renda?: number | null; idhm_educacao?: number | null
+    idhm_longevidade?: number | null; pib?: number | null; pib_per_capita?: number | null
+    populacao?: number | null; renda_media?: number | null
+    densidade_populacional?: number | null; area_km2?: number | null; municipio?: string | null
+  }
+  infraestrutura: { ok: boolean; raio_m?: number; contagens?: Record<string, number>; indice_infraestrutura?: number; erro?: string }
+  fontes: string[]
+  avisos: string[]
+}
+
+export async function buscarLocalizacao(req: { cep: string; numero?: string; bairro?: string; com_infraestrutura?: boolean }): Promise<PerfilLocalizacao> {
+  const resp = await fetch(`${BASE}/api/localizacao`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req),
+  })
+  if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`)
+  return resp.json()
+}
+
+// ---- Comparable Property Search Engine ----
+export interface AnuncioCandidato {
+  identificacao?: string | null; endereco?: string | null; tipo?: string | null
+  preco?: number | null; area_construida?: number | null; area_terreno?: number | null
+  quartos?: number | null; banheiros?: number | null; vagas?: number | null
+  padrao_construtivo?: string | null; bairro?: string | null; cidade?: string | null
+  distancia_km?: number | null; idade_anuncio_dias?: number | null; fonte?: string | null
+  indicadores?: Record<string, unknown> | null
+}
+
+export interface AmostraQualificada {
+  endereco?: string | null; identificacao?: string | null
+  preco: number; area: number; area_terreno?: number | null; preco_m2: number
+  bairro?: string | null; cidade?: string | null
+  quartos?: number | null; banheiros?: number | null; vagas?: number | null
+  fonte?: string | null; nivel_expansao: number
+  similaridade: Record<string, number>; score: number
+  territorial_score?: number | null; territorial_detalhes?: Record<string, number>
+}
+
+export interface ComparablesResponse {
+  status: string
+  imovel_alvo: Record<string, unknown>
+  amostras: AmostraQualificada[]
+  dados_regiao: Record<string, unknown>
+  confiabilidade_busca: number
+  resumo: {
+    total_candidatos: number; descartados_qualidade: number
+    amostras_qualificadas: number; meta_minima: number
+    suficiente_para_avaliacao: boolean; nivel_maximo_usado: number
+    similaridade_media: number
+  }
+  trilha_expansao: { nivel: number; descricao: string; executado: boolean; encontrados: number; motivo?: string; total_acumulado?: number }[]
+  descartados: { motivo: string; imovel?: string | null }[]
+  orientacao: string
+}
+
+export async function buscarComparables(req: {
+  imovel: Record<string, unknown>
+  candidatos: AnuncioCandidato[]
+  indicadores_regiao?: Record<string, unknown> | null
+  meta_minima?: number
+  meta_maxima?: number
+}): Promise<ComparablesResponse> {
+  const resp = await fetch(`${BASE}/api/comparables`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req),
+  })
+  if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`)
+  return resp.json()
+}
+
 // ---- Comparáveis (comps) — curadoria por similaridade ----
 export interface PerfilTerritorial {
   idh?: number | null

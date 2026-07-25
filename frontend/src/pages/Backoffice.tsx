@@ -90,13 +90,11 @@ export default function Backoffice() {
       try {
         const raw = localStorage.getItem('avaliador_comps_pendentes')
         if (!raw) return
-        const linhas = JSON.parse(raw) as { valor: number; area_terreno: number; area_construida: number }[]
+        const linhas = JSON.parse(raw) as Record<string, number>[]
         if (!Array.isArray(linhas) || !linhas.length) return
-        const registros = linhas.map((l) => ({
-          valor: l.valor,
-          area_terreno: l.area_terreno,
-          area_construida: l.area_construida,
-        }))
+        // Mantém só as colunas que têm algum valor útil (evita coluna constante 0)
+        const chaves = Object.keys(linhas[0]).filter((k) => linhas.some((l) => Number(l[k]) > 0))
+        const registros = linhas.map((l) => Object.fromEntries(chaves.map((k) => [k, l[k]])))
         setGrid(gridDeCSV(registros as unknown as Record<string, unknown>[]))
         setResultado(null); setAvaliacao(null); setPasso(1)
         localStorage.removeItem('avaliador_comps_pendentes')
