@@ -184,6 +184,41 @@ def gerar_word(
         doc.add_paragraph(f"✗ {erro}", style="List Bullet")
     doc.add_paragraph()
 
+    # Seções complementares (blindadas: nunca derrubam o laudo)
+    try:
+        _secoes_complementares_word(doc, resultado)
+    except Exception as e:
+        logger.warning("Seções complementares do Word falharam: %s", e)
+
+    # Gráficos
+    _add_heading(doc, "6. Gráficos", nivel=2)
+    imagens = gerar_todos_graficos_png(
+        resultado.get("graficos", {}),
+        nome_dependente="Valor",
+    )
+    for nome_img, dados_png in imagens.items():
+        buf = io.BytesIO(dados_png)
+        try:
+            doc.add_picture(buf, width=Inches(5.5))
+            doc.add_paragraph()
+        except Exception as e:
+            logger.warning("Não foi possível embutir imagem %s: %s", nome_img, e)
+
+    # Rodapé
+    doc.add_paragraph()
+    doc.add_paragraph(
+        f"Laudo gerado pelo sistema Avaliador em {datetime.now().strftime('%d/%m/%Y %H:%M')}. "
+        "Conforme NBR 14653-02 — ABNT."
+    ).alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    buf_out = io.BytesIO()
+    doc.save(buf_out)
+    buf_out.seek(0)
+    return buf_out.read()
+
+
+def _secoes_complementares_word(doc, resultado: Dict[str, Any]) -> None:
+    """Seções 5.1–5.3 do laudo Word (grau por item, avaliação, poder de predição)."""
     # Grau de fundamentação por item (se disponível)
     gf = resultado.get("grau_fundamentacao") or {}
     itens_gf = gf.get("itens") or {}
@@ -257,32 +292,6 @@ def gerar_word(
             f"Amostras com desvio dentro de ±20%: {pp.get('pct_dentro_20', 0)}%."
         )
         doc.add_paragraph()
-
-    # Gráficos
-    _add_heading(doc, "6. Gráficos", nivel=2)
-    imagens = gerar_todos_graficos_png(
-        resultado.get("graficos", {}),
-        nome_dependente="Valor",
-    )
-    for nome_img, dados_png in imagens.items():
-        buf = io.BytesIO(dados_png)
-        try:
-            doc.add_picture(buf, width=Inches(5.5))
-            doc.add_paragraph()
-        except Exception as e:
-            logger.warning("Não foi possível embutir imagem %s: %s", nome_img, e)
-
-    # Rodapé
-    doc.add_paragraph()
-    doc.add_paragraph(
-        f"Laudo gerado pelo sistema Avaliador em {datetime.now().strftime('%d/%m/%Y %H:%M')}. "
-        "Conforme NBR 14653-02 — ABNT."
-    ).alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    buf_out = io.BytesIO()
-    doc.save(buf_out)
-    buf_out.seek(0)
-    return buf_out.read()
 
 
 # ---------------------------------------------------------------------------

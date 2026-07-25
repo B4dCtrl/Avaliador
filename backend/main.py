@@ -35,6 +35,7 @@ from diagnosticos import diagnostico_completo
 from exportador import gerar_pdf, gerar_word
 from analise import analisar_amostras
 from saneamento import DadosInvalidos, sanear_dataset
+from viabilidade import analisar_viabilidade
 from models import (
     AnalisarAmostrasRequest,
     AvaliarImovelRequest,
@@ -42,6 +43,7 @@ from models import (
     DadosRegressaoRequest,
     ExportarRequest,
     RegressaoResponse,
+    ViabilidadeRequest,
 )
 from nbr_grau import (
     amplitude_pct,
@@ -441,6 +443,33 @@ def analisar_amostras_endpoint(request: AnalisarAmostrasRequest) -> Dict[str, An
         )
     except (ValueError, KeyError) as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# POST /api/viabilidade — análise de viabilidade de investimento
+# ---------------------------------------------------------------------------
+
+@app.post("/api/viabilidade", tags=["investimento"])
+def viabilidade_endpoint(request: ViabilidadeRequest) -> Dict[str, Any]:
+    """
+    Calcula indicadores de viabilidade (renda e revenda) a partir do valor
+    de mercado avaliado e dos dados do negócio informados.
+    """
+    try:
+        return analisar_viabilidade(
+            valor_mercado=request.valor_mercado,
+            preco_compra=request.preco_compra,
+            custos_aquisicao=request.custos_aquisicao,
+            custos_reforma=request.custos_reforma,
+            aluguel_mensal=request.aluguel_mensal,
+            despesas_mensais=request.despesas_mensais,
+            valorizacao_anual_pct=request.valorizacao_anual_pct,
+            horizonte_anos=request.horizonte_anos,
+            custo_venda_pct=request.custo_venda_pct,
+        )
+    except Exception as e:
+        logger.error("Erro na viabilidade: %s", e)
+        raise HTTPException(status_code=422, detail=f"Erro no cálculo de viabilidade: {e}")
 
 
 # ---------------------------------------------------------------------------

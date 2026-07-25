@@ -140,6 +140,7 @@ export default function Backoffice() {
             transformacoes: res.melhor_modelo.transformacoes, imovel_alvo: alvo, nivel_confianca: nivelConfianca,
           })
           setAvaliacao(av)
+          try { localStorage.setItem('avaliador_ultimo_valor', String(av.valor_estimado)) } catch { /* ignora */ }
         } catch { setAvaliacao(null) }
       } else { setAvaliacao(null) }
       setPasso(4)

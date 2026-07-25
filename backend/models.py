@@ -103,6 +103,19 @@ class AvaliarImovelRequest(BaseModel):
     nivel_confianca: float = Field(default=0.80, ge=0.50, le=0.99)
 
 
+class ViabilidadeRequest(BaseModel):
+    """Análise de viabilidade de investimento imobiliário."""
+    valor_mercado: float = Field(..., gt=0)
+    preco_compra: float = Field(..., gt=0)
+    custos_aquisicao: float = 0.0
+    custos_reforma: float = 0.0
+    aluguel_mensal: Optional[float] = None
+    despesas_mensais: float = 0.0
+    valorizacao_anual_pct: float = 0.0
+    horizonte_anos: float = Field(default=5.0, gt=0, le=50)
+    custo_venda_pct: float = 6.0
+
+
 class AnalisarAmostrasRequest(BaseModel):
     """Detecta outliers/amostras atípicas considerando o imóvel-alvo."""
     dados: List[Dict[str, Any]]

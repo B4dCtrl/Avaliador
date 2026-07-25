@@ -3,12 +3,14 @@ import Sidebar, { type SecaoApp } from '../components/ui/sidebar-with-submenu'
 import Clippy, { setContextoAssistente } from '../components/Clippy'
 import Backoffice from './Backoffice'
 import Home from './Home'
+import Viabilidade from './Viabilidade'
 import BancoImoveis from './BancoImoveis'
 import Aprender from './Aprender'
 
 const TITULOS: Record<SecaoApp, string> = {
   inicio: 'Início',
   avaliador: 'Avaliador',
+  viabilidade: 'Viabilidade de investimento',
   modelos: 'Modelos',
   banco: 'Banco de imóveis',
   aprender: 'Aprender',
@@ -47,6 +49,8 @@ export default function AppShell() {
           {secao === 'inicio' && <Home irPara={selecionar} novaAvaliacao={() => selecionar('avaliador')} />}
 
           {secao === 'avaliador' && <Backoffice />}
+
+          {secao === 'viabilidade' && <Viabilidade />}
 
           {secao === 'banco' && <BancoImoveis />}
 

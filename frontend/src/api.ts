@@ -197,6 +197,61 @@ export async function analisarAmostras(req: {
   return resp.json()
 }
 
+// ---- Viabilidade de investimento ----
+export interface ViabilidadeRequest {
+  valor_mercado: number
+  preco_compra: number
+  custos_aquisicao?: number
+  custos_reforma?: number
+  aluguel_mensal?: number | null
+  despesas_mensais?: number
+  valorizacao_anual_pct?: number
+  horizonte_anos?: number
+  custo_venda_pct?: number
+}
+
+export interface ViabilidadeResponse {
+  status: string
+  investimento_total: number
+  valor_mercado: number
+  comparacao_mercado: {
+    desconto_valor: number
+    desconto_pct: number
+    ganho_patrimonial: number
+    ganho_patrimonial_pct: number
+  }
+  renda: null | {
+    aluguel_mensal: number
+    liquido_mensal: number
+    yield_bruto_anual_pct: number
+    yield_liquido_anual_pct: number
+    cap_rate_pct: number
+    payback_anos: number | null
+  }
+  revenda: null | {
+    horizonte_anos: number
+    valor_futuro_estimado: number
+    renda_acumulada: number
+    lucro_liquido: number
+    roi_total_pct: number
+    retorno_anualizado_pct: number
+  }
+  veredito: string
+  pontuacao: number
+  sinais: string[]
+  observacao: string
+}
+
+export async function analisarViabilidade(req: ViabilidadeRequest): Promise<ViabilidadeResponse> {
+  const resp = await fetch(`${BASE}/api/viabilidade`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`)
+  return resp.json()
+}
+
 export interface ExportConfig {
   endereco: string
   area_terreno?: number
