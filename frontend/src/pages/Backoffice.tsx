@@ -84,6 +84,31 @@ export default function Backoffice() {
     setContextoAssistente(['amostras', 'imovel', 'calcular', 'resultado'][passo - 1])
   }, [passo])
 
+  // Importa comparáveis vindos da aba Comparáveis (não altera o motor de cálculo)
+  useEffect(() => {
+    const importar = () => {
+      try {
+        const raw = localStorage.getItem('avaliador_comps_pendentes')
+        if (!raw) return
+        const linhas = JSON.parse(raw) as { valor: number; area_terreno: number; area_construida: number }[]
+        if (!Array.isArray(linhas) || !linhas.length) return
+        const registros = linhas.map((l) => ({
+          valor: l.valor,
+          area_terreno: l.area_terreno,
+          area_construida: l.area_construida,
+        }))
+        setGrid(gridDeCSV(registros as unknown as Record<string, unknown>[]))
+        setResultado(null); setAvaliacao(null); setPasso(1)
+        localStorage.removeItem('avaliador_comps_pendentes')
+        flash(`${registros.length} comparável(is) importado(s) para as Amostras`)
+      } catch { /* ignora */ }
+    }
+    window.addEventListener('avaliador-importar-comps', importar)
+    importar() // caso o evento tenha ocorrido antes da montagem
+    return () => window.removeEventListener('avaliador-importar-comps', importar)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const flash = (m: string) => { setMsg(m); setErro(null); setTimeout(() => setMsg(null), 2500) }
 
   const handleImportCSV = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

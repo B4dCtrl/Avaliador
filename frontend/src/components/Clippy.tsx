@@ -31,6 +31,7 @@ const DICAS: Record<string, string> = {
   imovel: 'Aqui vamos preencher os dados do IMÓVEL que você vai avaliar — não confunda com as amostras! Coloque o endereço e as características (área, etc.) do imóvel-alvo.',
   calcular: 'Agora é só calcular. O sistema testa as transformações e escolhe o melhor modelo pela NBR 14653. Não precisa mexer nas configurações avançadas — o padrão já atende a norma.',
   resultado: 'Aqui está o resultado. Passe o mouse nos ícones (i) para entender cada número. Para adotar outro valor, escolha outro modelo em "Modelos calculados". Antes de fechar, gere o laudo!',
+  comparaveis: 'Este é o passo ANTES da avaliação: a curadoria. Descreva o imóvel de referência, informe o perfil da região e liste os candidatos — o sistema ranqueia por similaridade e explica o porquê. Depois envie os melhores direto para as Amostras.',
   viabilidade: 'Aqui você vê se o investimento compensa. Usamos o valor de mercado da sua última avaliação; informe o preço de compra, aluguel e/ou valorização e o sistema calcula rentabilidade, payback e retorno.',
   banco: 'Este é o banco colaborativo de imóveis. Cadastrando comparáveis com a fonte (link), você e outros avaliadores reaproveitam amostras verificadas — e o sistema sugere imóveis para subir o grau.',
   aprender: 'Aqui ficam trilhas curtas sobre a norma e a estatística da avaliação. Bom para tirar dúvidas de conceito.',

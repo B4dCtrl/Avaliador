@@ -197,6 +197,93 @@ export async function analisarAmostras(req: {
   return resp.json()
 }
 
+// ---- Comparáveis (comps) — curadoria por similaridade ----
+export interface PerfilTerritorial {
+  idh?: number | null
+  renda_per_capita?: number | null
+  densidade_populacional?: number | null
+  escolaridade_media_anos?: number | null
+  indice_seguranca?: number | null
+  infraestrutura?: number | null
+  distancia_centro_km?: number | null
+}
+
+export interface PerfilImovel {
+  tipo_imovel?: string | null
+  finalidade?: string | null
+  zoneamento?: string | null
+  area_terreno?: number | null
+  area_construida?: number | null
+  idade?: number | null
+  padrao_construtivo?: string | null
+  conservacao?: string | null
+  dormitorios?: number | null
+  banheiros?: number | null
+  vagas?: number | null
+  endereco?: string | null
+  bairro?: string | null
+  cidade?: string | null
+  uf?: string | null
+  cep?: string | null
+}
+
+export interface CandidatoComparavel extends PerfilImovel {
+  identificacao?: string | null
+  fonte?: string | null
+  preco?: number | null
+  data_anuncio?: string | null
+  distancia_km?: number | null
+  perfil_territorial?: PerfilTerritorial | null
+}
+
+export interface ComparavelPontuado {
+  indice: number
+  identificacao: string
+  fonte?: string | null
+  preco?: number | null
+  area_terreno?: number | null
+  area_construida?: number | null
+  bairro?: string | null
+  cidade?: string | null
+  data_anuncio?: string | null
+  similaridade_pct: number
+  classe: string
+  detalhamento: Record<string, { similaridade_pct: number; peso: number; peso_efetivo?: number }>
+  criterios_ignorados: string[]
+  cobertura_pct: number
+  territorial?: { indice: number; percentual: number; detalhes: Record<string, number> } | null
+}
+
+export interface ComparaveisResponse {
+  status: string
+  comparaveis: ComparavelPontuado[]
+  resumo: {
+    total_avaliados: number
+    total_aceitos: number
+    similaridade_media: number
+    excelentes: number
+    boas: number
+    aceitaveis: number
+    fracas: number
+    orientacao: string
+  }
+}
+
+export async function ranquearComparaveis(req: {
+  alvo: PerfilImovel
+  candidatos: CandidatoComparavel[]
+  perfil_territorial_alvo?: PerfilTerritorial | null
+  minimo_similaridade?: number
+}): Promise<ComparaveisResponse> {
+  const resp = await fetch(`${BASE}/api/comparaveis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`)
+  return resp.json()
+}
+
 // ---- Viabilidade de investimento ----
 export interface ViabilidadeRequest {
   valor_mercado: number

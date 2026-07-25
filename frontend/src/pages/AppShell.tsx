@@ -3,12 +3,14 @@ import Sidebar, { type SecaoApp } from '../components/ui/sidebar-with-submenu'
 import Clippy, { setContextoAssistente } from '../components/Clippy'
 import Backoffice from './Backoffice'
 import Home from './Home'
+import Comparaveis from './Comparaveis'
 import Viabilidade from './Viabilidade'
 import BancoImoveis from './BancoImoveis'
 import Aprender from './Aprender'
 
 const TITULOS: Record<SecaoApp, string> = {
   inicio: 'Início',
+  comparaveis: 'Comparáveis',
   avaliador: 'Avaliador',
   viabilidade: 'Viabilidade de investimento',
   modelos: 'Modelos',
@@ -47,6 +49,15 @@ export default function AppShell() {
 
         <div className="flex-1 overflow-auto">
           {secao === 'inicio' && <Home irPara={selecionar} novaAvaliacao={() => selecionar('avaliador')} />}
+
+          {secao === 'comparaveis' && (
+            <Comparaveis onEnviarParaAmostras={(linhas) => {
+              // Ponte: grava os comparáveis e leva o usuário para o Avaliador
+              localStorage.setItem('avaliador_comps_pendentes', JSON.stringify(linhas))
+              setSecao('avaliador')
+              window.dispatchEvent(new CustomEvent('avaliador-importar-comps'))
+            }} />
+          )}
 
           {secao === 'avaliador' && <Backoffice />}
 

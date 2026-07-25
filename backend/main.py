@@ -36,11 +36,13 @@ from exportador import gerar_pdf, gerar_word
 from analise import analisar_amostras
 from saneamento import DadosInvalidos, sanear_dataset
 from viabilidade import analisar_viabilidade
+from comparaveis import ranquear_comparaveis, similaridade_territorial
 from models import (
     AnalisarAmostrasRequest,
     AvaliarImovelRequest,
     BestfitRequest,
     DadosRegressaoRequest,
+    ComparaveisRequest,
     ExportarRequest,
     RegressaoResponse,
     ViabilidadeRequest,
@@ -443,6 +445,36 @@ def analisar_amostras_endpoint(request: AnalisarAmostrasRequest) -> Dict[str, An
         )
     except (ValueError, KeyError) as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# POST /api/comparaveis — ranqueia comps por similaridade (não estima valor)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/comparaveis", tags=["comparaveis"])
+def comparaveis_endpoint(request: ComparaveisRequest) -> Dict[str, Any]:
+    """
+    Pontua e ordena imóveis candidatos por similaridade com o imóvel de
+    referência (score multicritério 0–100%, com explicação por critério).
+
+    Não realiza estimativa de valor — apenas curadoria de comparáveis.
+    """
+    if not request.candidatos:
+        raise HTTPException(status_code=422, detail="Informe ao menos um imóvel candidato.")
+    try:
+        candidatos = [c.model_dump() for c in request.candidatos]
+        return ranquear_comparaveis(
+            alvo=request.alvo.model_dump(),
+            candidatos=candidatos,
+            perfil_territorial_alvo=(
+                request.perfil_territorial_alvo.model_dump()
+                if request.perfil_territorial_alvo else None
+            ),
+            minimo_similaridade=request.minimo_similaridade,
+        )
+    except Exception as e:
+        logger.error("Erro ao ranquear comparáveis: %s", e)
+        raise HTTPException(status_code=422, detail=f"Erro ao ranquear comparáveis: {e}")
 
 
 # ---------------------------------------------------------------------------

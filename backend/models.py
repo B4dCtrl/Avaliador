@@ -103,6 +103,58 @@ class AvaliarImovelRequest(BaseModel):
     nivel_confianca: float = Field(default=0.80, ge=0.50, le=0.99)
 
 
+# ---------------------------------------------------------------------------
+# Comparáveis (comps) — busca por similaridade. Isolado do motor de avaliação.
+# ---------------------------------------------------------------------------
+
+class PerfilTerritorial(BaseModel):
+    """Indicadores socioeconômicos/urbanos de uma região (bases públicas)."""
+    idh: Optional[float] = None
+    renda_per_capita: Optional[float] = None
+    densidade_populacional: Optional[float] = None
+    escolaridade_media_anos: Optional[float] = None
+    indice_seguranca: Optional[float] = None      # 0–10 (maior = mais seguro)
+    infraestrutura: Optional[float] = None        # 0–10
+    distancia_centro_km: Optional[float] = None
+
+
+class PerfilImovel(BaseModel):
+    """Perfil técnico do imóvel de referência."""
+    tipo_imovel: Optional[str] = None
+    finalidade: Optional[str] = None
+    zoneamento: Optional[str] = None
+    area_terreno: Optional[float] = None
+    area_construida: Optional[float] = None
+    idade: Optional[float] = None
+    padrao_construtivo: Optional[str] = None
+    conservacao: Optional[str] = None
+    dormitorios: Optional[float] = None
+    banheiros: Optional[float] = None
+    vagas: Optional[float] = None
+    endereco: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    cep: Optional[str] = None
+
+
+class CandidatoComparavel(PerfilImovel):
+    """Imóvel candidato encontrado, com dados de anúncio e região."""
+    identificacao: Optional[str] = None
+    fonte: Optional[str] = None            # link de verificação
+    preco: Optional[float] = None
+    data_anuncio: Optional[str] = None
+    distancia_km: Optional[float] = None
+    perfil_territorial: Optional[PerfilTerritorial] = None
+
+
+class ComparaveisRequest(BaseModel):
+    alvo: PerfilImovel
+    candidatos: List[CandidatoComparavel]
+    perfil_territorial_alvo: Optional[PerfilTerritorial] = None
+    minimo_similaridade: float = Field(default=0.0, ge=0.0, le=100.0)
+
+
 class ViabilidadeRequest(BaseModel):
     """Análise de viabilidade de investimento imobiliário."""
     valor_mercado: float = Field(..., gt=0)
