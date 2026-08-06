@@ -203,6 +203,19 @@ class AnuncioCandidato(BaseModel):
     indicadores: Optional[Dict[str, Any]] = None
 
 
+class EstrategiaRequest(BaseModel):
+    """Ficha técnica do imóvel gera a estratégia de busca."""
+    ficha: Dict[str, Any]
+    meta_minima: int = Field(default=15, ge=3, le=60)
+    refino_ia: bool = False
+
+
+class RetornoAgenteRequest(BaseModel):
+    """Retorno bruto de um agente de IA, para passar pelo filtro."""
+    retorno: Any
+    exigir_fonte: bool = True
+
+
 class BuscarFontesRequest(BaseModel):
     """Busca automática de imóveis em fontes públicas."""
     uf: str

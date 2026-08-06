@@ -40,6 +40,8 @@ from comparaveis import ranquear_comparaveis, similaridade_territorial
 from location_intelligence import perfil_localizacao, buscar_cep
 from comparable_search import buscar_comparaveis
 from fontes_dados import buscar_em_fontes, listar_fontes
+from estrategia import gerar_estrategia
+from crew_bridge import processar_retorno_agente
 from models import (
     AnalisarAmostrasRequest,
     AvaliarImovelRequest,
@@ -48,8 +50,10 @@ from models import (
     BuscarFontesRequest,
     ComparablesRequest,
     ComparaveisRequest,
+    EstrategiaRequest,
     ExportarRequest,
     LocalizacaoRequest,
+    RetornoAgenteRequest,
     RegressaoResponse,
     ViabilidadeRequest,
 )
@@ -480,6 +484,52 @@ def localizacao_endpoint(request: LocalizacaoRequest) -> Dict[str, Any]:
     )
     if not r.get("ok"):
         raise HTTPException(status_code=422, detail=r.get("erro", "Não foi possível montar o perfil."))
+    return r
+
+
+@app.post("/api/estrategia", tags=["inteligencia"])
+def estrategia_endpoint(request: EstrategiaRequest) -> Dict[str, Any]:
+    """
+    Gera a estratégia de busca a partir da ficha técnica.
+
+    Camada de regras sempre roda. O refino por IA é opcional e só altera
+    campos permitidos, com validação de limites.
+    """
+    if not request.ficha:
+        raise HTTPException(status_code=422, detail="Informe a ficha técnica do imóvel.")
+
+    refinador = None
+    if request.refino_ia:
+        # Ponto de extensão: conectar aqui um LLM. Sem chave configurada,
+        # a estratégia sai apenas das regras (e o aviso é registrado).
+        refinador = None
+
+    try:
+        est = gerar_estrategia(request.ficha, meta_minima=request.meta_minima,
+                               refinador_llm=refinador)
+        if request.refino_ia and "llm" not in est.get("origem", []):
+            est.setdefault("avisos", []).append(
+                "Refino por IA solicitado, mas nenhum provedor está configurado. "
+                "Estratégia gerada apenas por regras."
+            )
+        return est
+    except Exception as e:
+        logger.error("Erro ao gerar estratégia: %s", e)
+        raise HTTPException(status_code=422, detail=f"Erro ao gerar estratégia: {e}")
+
+
+@app.post("/api/agente/filtrar", tags=["inteligencia"])
+def filtrar_agente_endpoint(request: RetornoAgenteRequest) -> Dict[str, Any]:
+    """
+    Filtro anti-alucinação: recebe o retorno bruto de um agente de IA
+    (CrewAI ou outro) e devolve apenas candidatos verificáveis.
+
+    Preço/m² é recalculado, imóveis sem fonte ou com valor implausível são
+    descartados e números de laudo enviados pelo agente são ignorados.
+    """
+    r = processar_retorno_agente(request.retorno, exigir_fonte=request.exigir_fonte)
+    if r.get("status") == "erro":
+        raise HTTPException(status_code=422, detail=r["erro"])
     return r
 
 
