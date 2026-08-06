@@ -2,10 +2,12 @@ import { useState } from 'react'
 import {
   Search, Plus, Trash2, Loader2, MapPin, Home as HomeIcon, ClipboardPaste,
   Send, Users, TrendingUp, GraduationCap, Gauge, CheckCircle2, AlertTriangle, Layers,
+  Bot, FileJson, Copy, Check, Download, ShieldCheck,
 } from 'lucide-react'
 import {
-  buscarLocalizacao, buscarComparables, buscarEmFontes,
+  buscarLocalizacao, buscarComparables, buscarEmFontes, gerarEstrategia, filtrarRetornoAgente,
   type PerfilLocalizacao, type AnuncioCandidato, type ComparablesResponse,
+  type EstrategiaBusca, type FiltroAgenteResponse,
 } from '../api'
 
 const TIPOS = ['casa', 'apartamento', 'terreno', 'comercial']
@@ -67,6 +69,86 @@ export default function Comparaveis({ onEnviarParaAmostras }: Props) {
 
   const [buscandoFontes, setBuscandoFontes] = useState(false)
   const [infoFontes, setInfoFontes] = useState<string | null>(null)
+
+  // --- Ponte com agente de IA (CrewAI) ---
+  const [estrategia, setEstrategia] = useState<EstrategiaBusca | null>(null)
+  const [gerandoEst, setGerandoEst] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+  const [retornoAgente, setRetornoAgente] = useState('')
+  const [filtro, setFiltro] = useState<FiltroAgenteResponse | null>(null)
+  const [filtrando, setFiltrando] = useState(false)
+
+  /** Monta a ficha técnica a partir do formulário + localização. */
+  const montarFicha = () => ({
+    tipo: imovel.tipo || null,
+    area_construida: imovel.area_construida ? Number(imovel.area_construida) : null,
+    area_terreno: imovel.area_terreno ? Number(imovel.area_terreno) : null,
+    quartos: imovel.quartos ? Number(imovel.quartos) : null,
+    banheiros: imovel.banheiros ? Number(imovel.banheiros) : null,
+    vagas: imovel.vagas ? Number(imovel.vagas) : null,
+    padrao_construtivo: imovel.padrao_construtivo || null,
+    zoneamento: imovel.zoneamento || null,
+    endereco: loc?.localizacao.logradouro || null,
+    numero: numero || null,
+    bairro: imovel.bairro || loc?.localizacao.bairro || null,
+    cidade: loc?.localizacao.cidade || null,
+    uf: loc?.localizacao.uf || null,
+    cep: loc?.localizacao.cep || cep || null,
+  })
+
+  /** Pacote JSON entregue ao pesquisador (ficha + estratégia + região). */
+  const pacotePesquisa = () => ({
+    ficha_tecnica: montarFicha(),
+    estrategia_busca: estrategia,
+    dados_regiao: loc?.indicadores ?? null,
+    instrucoes: {
+      formato_esperado: 'JSON com lista "elementos"',
+      campos_por_imovel: ['endereco', 'preco', 'area_construida', 'area_terreno',
+                          'quartos', 'banheiros', 'vagas', 'bairro', 'cidade', 'url'],
+      regra: 'Todo imóvel precisa de URL de origem. Não estimar valor nem grau de fundamentação.',
+    },
+  })
+
+  const gerarPacote = async () => {
+    setErro(null); setGerandoEst(true)
+    try {
+      const e = await gerarEstrategia({ ficha: montarFicha(), meta_minima: 15 })
+      setEstrategia(e)
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao gerar estratégia')
+    } finally { setGerandoEst(false) }
+  }
+
+  const copiarPacote = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(pacotePesquisa(), null, 2))
+      setCopiado(true); setTimeout(() => setCopiado(false), 2000)
+    } catch { setErro('Não foi possível copiar. Selecione o texto manualmente.') }
+  }
+
+  const baixarPacote = () => {
+    const blob = new Blob([JSON.stringify(pacotePesquisa(), null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'ficha_pesquisa.json'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  /** Passa o retorno do agente pelo filtro e joga o que sobrou na tabela. */
+  const processarRetorno = async () => {
+    if (!retornoAgente.trim()) { setErro('Cole o retorno do pesquisador.'); return }
+    setErro(null); setFiltrando(true)
+    try {
+      const r = await filtrarRetornoAgente(retornoAgente)
+      setFiltro(r)
+      if (r.candidatos.length) {
+        setCandidatos([...candidatos.filter((c) => Object.keys(c).length > 0),
+                       ...(r.candidatos as AnuncioCandidato[])])
+      }
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao processar retorno')
+    } finally { setFiltrando(false) }
+  }
 
   /** Busca automática em fontes públicas (dados abertos — sem scraping). */
   const buscarAutomatico = async () => {
@@ -193,6 +275,7 @@ export default function Comparaveis({ onEnviarParaAmostras }: Props) {
           <Campo label="Banheiros" v={imovel.banheiros ?? ''} on={(x) => setI('banheiros', x)} ph="2" />
           <Campo label="Vagas" v={imovel.vagas ?? ''} on={(x) => setI('vagas', x)} ph="2" />
           <Campo label="Bairro" v={imovel.bairro ?? ''} on={(x) => setI('bairro', x)} texto ph="Centro" />
+          <Campo label="Zoneamento" v={imovel.zoneamento ?? ''} on={(x) => setI('zoneamento', x)} texto ph="ZR-1" />
         </div>
         {loc && (
           <p className="text-[11px] text-slate-500 mt-2">
@@ -255,8 +338,113 @@ export default function Comparaveis({ onEnviarParaAmostras }: Props) {
         )}
       </Secao>
 
-      {/* 03 — Candidatos */}
-      <Secao n="03" titulo="Imóveis candidatos" icone={<Layers size={16} />}>
+      {/* 03 — Pesquisador externo (CrewAI) */}
+      <Secao n="03" titulo="Pesquisador externo (opcional)" icone={<Bot size={16} />}>
+        <p className="text-[12px] text-slate-500 mb-3">
+          Gere o pacote JSON da pesquisa, rode no seu agente de IA e cole o retorno aqui.
+          Tudo que voltar passa por um filtro: imóvel sem link de origem, preço ou área implausível
+          é descartado, e o preço por m² é recalculado. <b>Grau e métricas nunca vêm do agente</b> —
+          são calculados pelo motor.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <button onClick={gerarPacote} disabled={gerandoEst}
+            className="px-3 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white flex items-center gap-1.5 font-medium">
+            {gerandoEst ? <Loader2 size={13} className="animate-spin" /> : <FileJson size={13} />}
+            {gerandoEst ? 'Gerando…' : '1. Gerar JSON da pesquisa'}
+          </button>
+          {estrategia && (
+            <>
+              <button onClick={copiarPacote} className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 hover:bg-slate-50 flex items-center gap-1">
+                {copiado ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                {copiado ? 'Copiado!' : 'Copiar'}
+              </button>
+              <button onClick={baixarPacote} className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 hover:bg-slate-50 flex items-center gap-1">
+                <Download size={13} /> Baixar .json
+              </button>
+            </>
+          )}
+        </div>
+
+        {estrategia && (
+          <div className="mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2 text-[12px]">
+              <Kpi label="Tipologia" v={estrategia.tipo_normalizado} />
+              <Kpi label="Raio inicial" v={`${(estrategia.raio_inicial_metros / 1000).toFixed(1)} km`} />
+              <Kpi label="Meta de amostras" v={`${estrategia.meta_minima_amostras}–${estrategia.meta_maxima_amostras}`} />
+              <Kpi label="Obrigatórias" v={String(estrategia.criterios_obrigatorios.length)} />
+            </div>
+            <div className="text-[11px] text-slate-600 mb-1">
+              <b>Obrigatórios:</b> {estrategia.criterios_obrigatorios.join(', ') || '—'} ·{' '}
+              <b>Flexíveis:</b> {estrategia.criterios_flexiveis.join(', ') || '—'}
+            </div>
+            <p className="text-[11px] text-slate-500 italic">{estrategia.justificativa_tipologia}</p>
+            {estrategia.avisos.length > 0 && (
+              <ul className="mt-1 text-[11px] text-amber-700 list-disc pl-4">
+                {estrategia.avisos.map((a, i) => <li key={i}>{a}</li>)}
+              </ul>
+            )}
+            <details className="mt-2">
+              <summary className="text-[11px] text-blue-600 cursor-pointer">Ver JSON completo</summary>
+              <pre className="mt-1 p-2 bg-slate-900 text-slate-100 rounded text-[10px] overflow-auto max-h-56">
+{JSON.stringify(pacotePesquisa(), null, 2)}
+              </pre>
+            </details>
+          </div>
+        )}
+
+        <label className="block text-[11px] text-slate-500 mb-1">2. Cole aqui o retorno do pesquisador</label>
+        <textarea value={retornoAgente} onChange={(e) => setRetornoAgente(e.target.value)} rows={5}
+          placeholder='{"elementos": [{"endereco": "...", "preco": 500000, "area_construida": 100, "url": "https://..."}]}'
+          className="w-full px-2 py-1.5 text-[11px] border border-slate-300 rounded font-mono" />
+        <button onClick={processarRetorno} disabled={filtrando || !retornoAgente.trim()}
+          className="mt-2 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white flex items-center gap-1.5 font-medium">
+          {filtrando ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+          {filtrando ? 'Filtrando…' : '3. Filtrar e adicionar aos candidatos'}
+        </button>
+
+        {filtro && (
+          <div className="mt-3 space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[12px]">
+              <Kpi label="Recebidos" v={String(filtro.resumo_filtro.recebidos)} />
+              <Kpi label="Aceitos" v={String(filtro.resumo_filtro.aceitos)} />
+              <Kpi label="Rejeitados" v={String(filtro.resumo_filtro.rejeitados)} />
+              <Kpi label="R$/m² corrigidos" v={String(filtro.resumo_filtro.precos_m2_corrigidos)} />
+            </div>
+
+            {filtro.contradicoes.length > 0 && (
+              <div className="p-2.5 rounded-lg bg-red-50 border border-red-200">
+                <div className="text-[11px] font-semibold text-red-700 mb-1 flex items-center gap-1">
+                  <AlertTriangle size={13} /> Contradições no retorno do agente
+                </div>
+                <ul className="text-[11px] text-red-700 list-disc pl-4">
+                  {filtro.contradicoes.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {filtro.rejeitados.length > 0 && (
+              <details>
+                <summary className="text-[11px] text-slate-500 cursor-pointer">
+                  {filtro.rejeitados.length} imóvel(is) descartado(s) pelo filtro
+                </summary>
+                <ul className="mt-1 text-[11px] text-slate-500 list-disc pl-4">
+                  {filtro.rejeitados.map((r, i) => <li key={i}>{r.imovel || 'sem nome'} — {r.motivo}</li>)}
+                </ul>
+              </details>
+            )}
+
+            {filtro.campos_ignorados.length > 0 && (
+              <p className="text-[10px] text-slate-400">
+                Campos ignorados do agente (calculados pelo motor): {filtro.campos_ignorados.join(', ')}.
+              </p>
+            )}
+          </div>
+        )}
+      </Secao>
+
+      {/* 04 — Candidatos */}
+      <Secao n="04" titulo="Imóveis candidatos" icone={<Layers size={16} />}>
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <button onClick={buscarAutomatico} disabled={buscandoFontes || !loc}
             title={loc ? 'Buscar em bases públicas (Caixa)' : 'Busque o CEP primeiro'}
@@ -337,7 +525,7 @@ export default function Comparaveis({ onEnviarParaAmostras }: Props) {
 
       {/* 04 — Resultado */}
       {res && (
-        <Secao n="04" titulo="Amostras qualificadas" icone={<CheckCircle2 size={16} />}>
+        <Secao n="05" titulo="Amostras qualificadas" icone={<CheckCircle2 size={16} />}>
           <div className={`rounded-lg border-2 p-3 mb-3 ${res.resumo.suficiente_para_avaliacao ? 'border-emerald-300 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
             <div className="flex items-center gap-2 font-semibold text-slate-800">
               {res.resumo.suficiente_para_avaliacao ? <CheckCircle2 size={18} className="text-emerald-600" /> : <AlertTriangle size={18} className="text-amber-600" />}

@@ -224,6 +224,54 @@ export async function buscarLocalizacao(req: { cep: string; numero?: string; bai
   return resp.json()
 }
 
+// ---- Estratégia de busca (regras + refino IA opcional) ----
+export interface EstrategiaBusca {
+  imovel_avaliando: Record<string, unknown>
+  tipo_normalizado: string
+  criterios_obrigatorios: string[]
+  criterios_flexiveis: string[]
+  raio_inicial_metros: number
+  tolerancias: Record<string, number>
+  meta_minima_amostras: number
+  meta_maxima_amostras: number
+  score_territorial_minimo: number
+  regras_expansao: { ordem: number; acao: string; gatilho: string; justificativa: string }[]
+  justificativa_tipologia: string
+  avisos: string[]
+  origem: string[]
+}
+
+export async function gerarEstrategia(req: {
+  ficha: Record<string, unknown>; meta_minima?: number; refino_ia?: boolean
+}): Promise<EstrategiaBusca> {
+  const resp = await fetch(`${BASE}/api/estrategia`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req),
+  })
+  if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`)
+  return resp.json()
+}
+
+// ---- Filtro anti-alucinação do retorno de agente de IA ----
+export interface FiltroAgenteResponse {
+  status: string
+  candidatos: Record<string, unknown>[]
+  rejeitados: { motivo: string; imovel?: string }[]
+  resumo_filtro: { recebidos: number; aceitos: number; rejeitados: number; precos_m2_corrigidos: number }
+  contradicoes: string[]
+  campos_ignorados: string[]
+  texto_agente?: string | null
+  observacao: string
+}
+
+export async function filtrarRetornoAgente(retorno: unknown, exigirFonte = true): Promise<FiltroAgenteResponse> {
+  const resp = await fetch(`${BASE}/api/agente/filtrar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ retorno, exigir_fonte: exigirFonte }),
+  })
+  if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`)
+  return resp.json()
+}
+
 // ---- Fontes públicas (busca automática, sem scraping) ----
 export interface FonteDados { id: string; nome: string; descricao: string; legal: string }
 
